@@ -1,31 +1,25 @@
-# TODO should this really be a global scope, or should the connection be returned/passed every time in these functions?
-connection <<- NULL
-
 #' Connects to a running flowR server at the given host and port
 #'
-#' @seealso [send_flowr_request()]
-#' @seealso [disconnect_flowr()]
+#' @seealso [send_request()]
+#' @seealso [disconnect()]
 #'
 #' @export
-connect_flowr_if_necessary <- function(host = "localhost", port = 1042, blocking = TRUE) {
-  if (!is.null(connection)) {
-    return(list("connection" = connection))
-  }
-
-  connection <<- socketConnection(host = host, port = port, server = FALSE, blocking = blocking, open = "r+")
+connect <- function(host = "localhost", port = 1042, blocking = TRUE) {
+  connection <- socketConnection(host = host, port = port, server = FALSE, blocking = blocking, open = "r+")
 
   # the first response is the hello message
   hello <- readLines(connection, n = 1)
+
   return(list("connection" = connection, "hello" = hello))
 }
 
 #' Sends a JSON request to the running flowR server, if connected
 #'
-#' @seealso [connect_flowr_if_necessary()]
-#' @seealso [disconnect_flowr()]
+#' @seealso [connect()]
+#' @seealso [disconnect()]
 #'
 #' @export
-send_flowr_request <- function(command) {
+send_request <- function(connection, command) {
   if (is.null(connection)) {
     return()
   }
@@ -40,16 +34,15 @@ send_flowr_request <- function(command) {
 
 #' Closes an active connection to a flowR server, if connected
 #'
-#' @seealso [connect_flowr_if_necessary()]
-#' @seealso [send_flowr_request()]
+#' @seealso [connect()]
+#' @seealso [send_request()]
 #'
 #' @export
-disconnect_flowr <- function() {
+disconnect <- function(connection) {
   if (is.null(connection)) {
     return(FALSE)
   }
 
   close(connection)
-  connection <<- NULL
   return(TRUE)
 }
