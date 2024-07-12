@@ -1,3 +1,5 @@
+# TODO probably introduce some sort of object-oriented approach here, where send_request and disconnect can be functions in the object returned by connect
+
 #' Connects to a running flowR server at the given host and port
 #'
 #' @seealso [send_request()]
