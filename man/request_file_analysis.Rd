@@ -2,8 +2,7 @@
 % Please edit documentation in R/file_analysis.R
 \name{request_file_analysis}
 \alias{request_file_analysis}
-\title{Sends a \href{https://github.com/flowr-analysis/flowr/wiki/Interface#the-analysis-request}{"file-analysis"} request
-Note that either \code{filepath} or \code{content} must be provided, but never both.}
+\title{Sends a \href{https://github.com/flowr-analysis/flowr/wiki/Interface#the-analysis-request}{"file-analysis"} request}
 \usage{
 request_file_analysis(
   filepath = NULL,
@@ -16,6 +15,8 @@ request_file_analysis(
 \arguments{
 \item{filepath}{The path to the file (must be visible to the server)}
 
+\item{content}{The R code to be analyzed}
+
 \item{id}{The id of the request}
 
 \item{filetoken}{The filetoken of the file to be analyzed}
@@ -26,6 +27,5 @@ request_file_analysis(
 A list containing the id, filetoken and the response
 }
 \description{
-Sends a \href{https://github.com/flowr-analysis/flowr/wiki/Interface#the-analysis-request}{"file-analysis"} request
 Note that either \code{filepath} or \code{content} must be provided, but never both.
 }

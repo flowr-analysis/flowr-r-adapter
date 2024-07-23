@@ -2,9 +2,11 @@ source("R/connect.R")
 source("R/utils.R")
 
 #' Sends a ["file-analysis"](https://github.com/flowr-analysis/flowr/wiki/Interface#the-analysis-request) request
+#'
 #' Note that either `filepath` or `content` must be provided, but never both.
 #'
 #' @param filepath The path to the file (must be visible to the server)
+#' @param content The R code to be analyzed
 #' @param id The id of the request
 #' @param filetoken The filetoken of the file to be analyzed
 #' @param con The connection to the server
