@@ -44,7 +44,7 @@ request_file_analysis <- function(filepath = NULL,
       "filetoken": "%s",
       "content":   "%s",
       "cfg":       %s
-    }', id, filetoken, content, jsonlite::toJSON(cfg))
+    }', id, filetoken, content, jsonlite::toJSON(cfg, auto_unbox = TRUE))
   }
 
   res <- send_request(con, request)
