@@ -13,13 +13,15 @@ source("R/utils.R")
 #' @param con The connection to the server
 #' @return A list containing the id, filetoken and the response
 #'
+#' @seealso [connect()]
+#'
 #' @export
 request_file_analysis <- function(filepath = NULL,
                                   content = NULL,
                                   cfg = FALSE,
                                   id = get_new_id(),
                                   filetoken = get_filetoken(),
-                                  con = connect()) {
+                                  con) {
   if (is.null(filepath) && is.null(content)) {
     stop("Either filepath or content must be provided")
   }

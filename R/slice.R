@@ -11,12 +11,10 @@ source("R/utils.R")
 #' @return A list containing the id and the response
 #'
 #' @seealso [initiate_file_analysis()]
+#' @seealso [connect()]
 #'
 #' @export
-request_slice <- function(filetoken,
-                          criteria,
-                          id = get_new_id(),
-                          con = connect()) {
+request_slice <- function(filetoken, criteria, id = get_new_id(), con) {
   request <- fromRJSON('{
     "type":      "request-slice",
     "id":        "%s",

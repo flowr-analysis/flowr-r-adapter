@@ -4,7 +4,7 @@
 \alias{request_repl}
 \title{Sends a \href{https://github.com/flowr-analysis/flowr/wiki/Interface#the-repl-request}{"request-repl-execution"} request}
 \usage{
-request_repl(expression, id = get_new_id(), con = connect())
+request_repl(expression, id = get_new_id(), con)
 }
 \arguments{
 \item{expression}{The expression to be executed by the REPL}
@@ -18,4 +18,7 @@ A list containing the id and the response
 }
 \description{
 Sends a \href{https://github.com/flowr-analysis/flowr/wiki/Interface#the-repl-request}{"request-repl-execution"} request
+}
+\seealso{
+\code{\link[=connect]{connect()}}
 }

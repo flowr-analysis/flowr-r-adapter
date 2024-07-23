@@ -8,8 +8,10 @@ source("R/utils.R")
 #' @param con The connection to the server
 #' @return A list containing the id and the response
 #'
+#' @seealso [connect()]
+#'
 #' @export
-request_repl <- function(expression, id = get_new_id(), con = connect()) {
+request_repl <- function(expression, id = get_new_id(), con) {
   request <- fromRJSON('{
     "type":       "request-repl-execution",
     "id":         "%s",

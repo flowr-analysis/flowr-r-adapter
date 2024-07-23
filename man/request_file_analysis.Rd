@@ -9,8 +9,8 @@ request_file_analysis(
   content = NULL,
   cfg = FALSE,
   id = get_new_id(),
-  filetoken = get_filetoken(),
-  con = connect()
+  filetoken = get_filetoken(content),
+  con
 )
 }
 \arguments{
@@ -31,4 +31,7 @@ A list containing the id, filetoken and the response
 }
 \description{
 Note that either \code{filepath} or \code{content} must be provided, but never both.
+}
+\seealso{
+\code{\link[=connect]{connect()}}
 }
