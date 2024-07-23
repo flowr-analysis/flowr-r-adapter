@@ -21,7 +21,7 @@ request_file_analysis <- function(con,
                                   content = NULL,
                                   cfg = FALSE,
                                   id = get_new_id(),
-                                  filetoken = get_filetoken(),
+                                  filetoken = get_filetoken(filepath, content)) {
   if (is.null(filepath) && is.null(content)) {
     stop("Either filepath or content must be provided")
   }

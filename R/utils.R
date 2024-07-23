@@ -15,10 +15,18 @@ handle_err_result <- function(res) {
 
 next_id <- 0
 get_new_id <- function() {
-  next_id <<- next_id + 1
+  # next_id <<- next_id + 1
   return(next_id)
 }
 
-get_filetoken <- function(filepath) {
-  return(filepath)
+get_filetoken <- function(filepath = NULL, content = NULL) {
+  if (!is.null(filepath)) {
+    if (!file.exists(filepath)) {
+      stop("File does not exist: ", filepath)
+    }
+    token <- digest::digest(readLines(filepath))
+  } else if (!is.null(content)) {
+    token <- digest::digest(content)
+  }
+  return(token)
 }
