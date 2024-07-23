@@ -2,10 +2,12 @@
 % Please edit documentation in R/file_analysis.R
 \name{request_file_analysis}
 \alias{request_file_analysis}
-\title{Sends a \href{https://github.com/flowr-analysis/flowr/wiki/Interface#the-analysis-request}{"file-analysis"} request}
+\title{Sends a \href{https://github.com/flowr-analysis/flowr/wiki/Interface#the-analysis-request}{"file-analysis"} request
+Note that either \code{filepath} or \code{content} must be provided, but never both.}
 \usage{
 request_file_analysis(
-  filepath,
+  filepath = NULL,
+  content = NULL,
   id = get_new_id(),
   filetoken = get_filetoken(),
   con = connect()
@@ -25,4 +27,5 @@ A list containing the id, filetoken and the response
 }
 \description{
 Sends a \href{https://github.com/flowr-analysis/flowr/wiki/Interface#the-analysis-request}{"file-analysis"} request
+Note that either \code{filepath} or \code{content} must be provided, but never both.
 }
