@@ -1,5 +1,3 @@
-library(jsonlite)
-
 source("R/connect.R")
 source("R/utils.R")
 
@@ -24,7 +22,7 @@ request_slice <- function(filetoken,
     "id":        "%s",
     "filetoken": "%s",
     "criterion": %s
-  }', filetoken, toJSON(criteria))
+  }', filetoken, jsonlite::toJSON(criteria))
   res <- send_request(con, request)
 
   if (handle_err_result(res)) {

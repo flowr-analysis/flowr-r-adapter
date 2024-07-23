@@ -1,7 +1,5 @@
-library(jsonlite)
-
 fromRJSON <- function(x, ...) {
-  return(fromJSON(sprintf(x, ...),
+  return(jsonlite::fromJSON(sprintf(x, ...),
     simplifyVector = FALSE,
     simplifyDataFrame = FALSE,
     simplifyMatrix = FALSE

@@ -1,5 +1,3 @@
-library(jsonlite)
-
 source("R/connect.R")
 source("R/utils.R")
 
@@ -38,7 +36,7 @@ request_file_analysis <- function(filepath = NULL,
       "filetoken": "%s",
       "filepath":  "%s",
       "cfg":       %s
-    }', id, filetoken, filepath, toJSON(cfg))
+    }', id, filetoken, filepath, jsonlite::toJSON(cfg))
   } else if (!is.null(content)) {
     request <- fromRJSON('{
       "type":      "request-file-analysis",
@@ -46,7 +44,7 @@ request_file_analysis <- function(filepath = NULL,
       "filetoken": "%s",
       "content":   "%s",
       "cfg":       %s
-    }', id, filetoken, content, toJSON(cfg))
+    }', id, filetoken, content, jsonlite::toJSON(cfg))
   }
 
   res <- send_request(con, request)
