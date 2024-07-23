@@ -10,6 +10,7 @@ source("R/utils.R")
 #' @param criteria The slice's criteria
 #' @param id The id of the request
 #' @param con The connection to the server
+#' @return A list containing the id and the response
 #'
 #' @seealso [initiate_file_analysis()]
 #'

@@ -16,6 +16,9 @@ request_slice(filetoken, criteria, id = get_new_id(), con = connect())
 
 \item{con}{The connection to the server}
 }
+\value{
+A list containing the id and the response
+}
 \description{
 Sends a \href{https://github.com/flowr-analysis/flowr/wiki/Interface#the-slice-request}{"request-slice"} request
 }
