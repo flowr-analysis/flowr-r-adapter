@@ -1,0 +1,26 @@
+library(jsonlite)
+
+fromRJSON <- function(x, ...) {
+  return(fromJSON(sprintf(x, ...),
+    simplifyVector = FALSE,
+    simplifyDataFrame = FALSE,
+    simplifyMatrix = FALSE
+  ))
+}
+
+handle_err_result <- function(res) {
+  if (res$type == "error") {
+    return(TRUE)
+  }
+  return(FALSE)
+}
+
+next_id <- 0
+get_new_id <- function() {
+  next_id <<- next_id + 1
+  return(next_id)
+}
+
+get_filetoken <- function(filepath) {
+  return(filepath)
+}

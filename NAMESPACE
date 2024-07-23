@@ -2,6 +2,8 @@
 
 export(connect)
 export(disconnect)
+export(request_file_analysis)
+export(request_slice)
 export(send_request)
 export(visit_node)
 export(visit_nodes)
