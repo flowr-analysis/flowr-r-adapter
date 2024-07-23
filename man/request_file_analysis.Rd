@@ -7,6 +7,7 @@
 request_file_analysis(
   filepath = NULL,
   content = NULL,
+  cfg = FALSE,
   id = get_new_id(),
   filetoken = get_filetoken(),
   con = connect()
@@ -16,6 +17,8 @@ request_file_analysis(
 \item{filepath}{The path to the file (must be visible to the server)}
 
 \item{content}{The R code to be analyzed}
+
+\item{cfg}{Weather to include the control flow graph in the response}
 
 \item{id}{The id of the request}
 

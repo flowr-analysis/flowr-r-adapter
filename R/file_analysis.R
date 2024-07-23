@@ -1,3 +1,5 @@
+library(jsonlite)
+
 source("R/connect.R")
 source("R/utils.R")
 
@@ -7,6 +9,7 @@ source("R/utils.R")
 #'
 #' @param filepath The path to the file (must be visible to the server)
 #' @param content The R code to be analyzed
+#' @param cfg Weather to include the control flow graph in the response
 #' @param id The id of the request
 #' @param filetoken The filetoken of the file to be analyzed
 #' @param con The connection to the server
@@ -15,6 +18,7 @@ source("R/utils.R")
 #' @export
 request_file_analysis <- function(filepath = NULL,
                                   content = NULL,
+                                  cfg = FALSE,
                                   id = get_new_id(),
                                   filetoken = get_filetoken(),
                                   con = connect()) {
@@ -32,15 +36,17 @@ request_file_analysis <- function(filepath = NULL,
       "type":      "request-file-analysis",
       "id":        "%s",
       "filetoken": "%s",
-      "filepath":  "%s"
-    }', id, filetoken, filepath)
+      "filepath":  "%s",
+      "cfg":       %s
+    }', id, filetoken, filepath, toJSON(cfg))
   } else if (!is.null(content)) {
     request <- fromRJSON('{
       "type":      "request-file-analysis",
       "id":        "%s",
       "filetoken": "%s",
-      "content":   "%s"
-    }', id, filetoken, content)
+      "content":   "%s",
+      "cfg":       %s
+    }', id, filetoken, content, toJSON(cfg))
   }
 
   res <- send_request(con, request)
