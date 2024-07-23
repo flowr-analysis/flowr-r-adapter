@@ -2,7 +2,7 @@
 % Please edit documentation in R/file_analysis.R
 \name{request_file_analysis}
 \alias{request_file_analysis}
-\title{Sends a "file-analysis" request}
+\title{Sends a \href{https://github.com/flowr-analysis/flowr/wiki/Interface#the-analysis-request}{"file-analysis"} request}
 \usage{
 request_file_analysis(
   filepath,
@@ -24,5 +24,5 @@ request_file_analysis(
 A list containing the id, filetoken and the response
 }
 \description{
-Sends a "file-analysis" request
+Sends a \href{https://github.com/flowr-analysis/flowr/wiki/Interface#the-analysis-request}{"file-analysis"} request
 }

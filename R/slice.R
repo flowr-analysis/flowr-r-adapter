@@ -3,7 +3,7 @@ library(jsonlite)
 source("R/connect.R")
 source("R/utils.R")
 
-#' Send a "request-slice" request
+#' Sends a ["request-slice"](https://github.com/flowr-analysis/flowr/wiki/Interface#the-slice-request) request
 #'
 #' @param filetoken The filetoken of the file to be sliced
 #' (retrieved by a previous "file-analysis" request)

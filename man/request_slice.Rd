@@ -2,7 +2,7 @@
 % Please edit documentation in R/slice.R
 \name{request_slice}
 \alias{request_slice}
-\title{Send a "request-slice" request}
+\title{Sends a \href{https://github.com/flowr-analysis/flowr/wiki/Interface#the-slice-request}{"request-slice"} request}
 \usage{
 request_slice(filetoken, criteria, id = get_new_id(), con = connect())
 }
@@ -17,7 +17,7 @@ request_slice(filetoken, criteria, id = get_new_id(), con = connect())
 \item{con}{The connection to the server}
 }
 \description{
-Send a "request-slice" request
+Sends a \href{https://github.com/flowr-analysis/flowr/wiki/Interface#the-slice-request}{"request-slice"} request
 }
 \seealso{
 \code{\link[=initiate_file_analysis]{initiate_file_analysis()}}

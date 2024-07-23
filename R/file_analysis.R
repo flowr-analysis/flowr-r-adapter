@@ -1,7 +1,7 @@
 source("R/connect.R")
 source("R/utils.R")
 
-#' Sends a "file-analysis" request
+#' Sends a ["file-analysis"](https://github.com/flowr-analysis/flowr/wiki/Interface#the-analysis-request) request
 #'
 #' @param filepath The path to the file (must be visible to the server)
 #' @param id The id of the request
