@@ -38,7 +38,7 @@ request_file_analysis <- function(con,
       "filetoken": "%s",
       "filepath":  "%s",
       "cfg":       %s
-    }', id, filetoken, filepath, jsonlite::toJSON(cfg))
+    }', id, filetoken, filepath, jsonlite::toJSON(cfg, auto_unbox = TRUE))
   } else if (!is.null(content)) {
     request <- fromRJSON('{
       "type":      "request-file-analysis",
