@@ -4,14 +4,14 @@
 \alias{request_repl}
 \title{Sends a \href{https://github.com/flowr-analysis/flowr/wiki/Interface#the-repl-request}{"request-repl-execution"} request}
 \usage{
-request_repl(expression, id = get_new_id(), con)
+request_repl(con, expression, id = get_new_id())
 }
 \arguments{
+\item{con}{The connection to the server}
+
 \item{expression}{The expression to be executed by the REPL}
 
 \item{id}{The id of the request}
-
-\item{con}{The connection to the server}
 }
 \value{
 A list containing the id and the response

@@ -5,15 +5,17 @@
 \title{Sends a \href{https://github.com/flowr-analysis/flowr/wiki/Interface#the-analysis-request}{"file-analysis"} request}
 \usage{
 request_file_analysis(
+  con,
   filepath = NULL,
   content = NULL,
   cfg = FALSE,
   id = get_new_id(),
-  filetoken = get_filetoken(content),
-  con
+  filetoken = get_filetoken(content)
 )
 }
 \arguments{
+\item{con}{The connection to the server}
+
 \item{filepath}{The path to the file (must be visible to the server)}
 
 \item{content}{The R code to be analyzed}
@@ -23,8 +25,6 @@ request_file_analysis(
 \item{id}{The id of the request}
 
 \item{filetoken}{The filetoken of the file to be analyzed}
-
-\item{con}{The connection to the server}
 }
 \value{
 A list containing the id, filetoken and the response

@@ -4,17 +4,17 @@
 \alias{request_slice}
 \title{Sends a \href{https://github.com/flowr-analysis/flowr/wiki/Interface#the-slice-request}{"request-slice"} request}
 \usage{
-request_slice(filetoken, criteria, id = get_new_id(), con)
+request_slice(con, filetoken, criteria, id = get_new_id())
 }
 \arguments{
+\item{con}{The connection to the server}
+
 \item{filetoken}{The filetoken of the file to be sliced
 (retrieved by a previous "file-analysis" request)}
 
 \item{criteria}{The slice's criteria}
 
 \item{id}{The id of the request}
-
-\item{con}{The connection to the server}
 }
 \value{
 A list containing the id and the response

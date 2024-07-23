@@ -5,23 +5,23 @@ source("R/utils.R")
 #'
 #' Note that either `filepath` or `content` must be provided, but never both.
 #'
+#' @param con The connection to the server
 #' @param filepath The path to the file (must be visible to the server)
 #' @param content The R code to be analyzed
 #' @param cfg Weather to include the control flow graph in the response
 #' @param id The id of the request
 #' @param filetoken The filetoken of the file to be analyzed
-#' @param con The connection to the server
 #' @return A list containing the id, filetoken and the response
 #'
 #' @seealso [connect()]
 #'
 #' @export
-request_file_analysis <- function(filepath = NULL,
+request_file_analysis <- function(con,
+                                  filepath = NULL,
                                   content = NULL,
                                   cfg = FALSE,
                                   id = get_new_id(),
                                   filetoken = get_filetoken(),
-                                  con) {
   if (is.null(filepath) && is.null(content)) {
     stop("Either filepath or content must be provided")
   }
