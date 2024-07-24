@@ -10,7 +10,7 @@ send_request(connection, command)
 Sends a JSON request to the running flowR server, if connected
 }
 \seealso{
-\code{\link[=connect_flowr_if_necessary]{connect_flowr_if_necessary()}}
+\code{\link[=connect]{connect()}}
 
-\code{\link[=disconnect_flowr]{disconnect_flowr()}}
+\code{\link[=disconnect]{disconnect()}}
 }

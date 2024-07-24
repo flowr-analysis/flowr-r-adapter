@@ -10,7 +10,7 @@ disconnect(connection)
 Closes an active connection to a flowR server, if connected
 }
 \seealso{
-\code{\link[=connect_flowr_if_necessary]{connect_flowr_if_necessary()}}
+\code{\link[=connect]{connect()}}
 
-\code{\link[=send_flowr_request]{send_flowr_request()}}
+\code{\link[=send_request]{send_request()}}
 }

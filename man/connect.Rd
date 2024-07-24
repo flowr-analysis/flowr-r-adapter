@@ -10,7 +10,7 @@ connect(host = "localhost", port = 1042, blocking = TRUE)
 Connects to a running flowR server at the given host and port
 }
 \seealso{
-\code{\link[=send_flowr_request]{send_flowr_request()}}
+\code{\link[=send_request]{send_request()}}
 
-\code{\link[=disconnect_flowr]{disconnect_flowr()}}
+\code{\link[=disconnect]{disconnect()}}
 }
