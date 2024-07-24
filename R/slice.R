@@ -16,8 +16,7 @@ request_slice <- function(con, filetoken, criteria, id = get_new_id()) {
     type = "request-slice",
     id = id,
     filetoken = filetoken,
-    # TODO: prevent auto unboxing if there's only one criterion
-    criterion = criteria
+    criterion = I(criteria)
   )
   res <- send_request(con, request)
 
