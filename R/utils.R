@@ -14,8 +14,10 @@ handle_err_result <- function(res) {
 }
 
 make_id_provider <- function(next_id = 0) {
-  function()
+  function() {
     next_id <<- next_id + 1
+    return(as.character(next_id))
+  }
 }
 get_new_id <- make_id_provider()
 
