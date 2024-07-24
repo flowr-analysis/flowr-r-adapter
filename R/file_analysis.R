@@ -17,19 +17,15 @@ source("R/utils.R")
 #'
 #' @export
 request_file_analysis <- function(con,
-                                  filepath = NULL,
-                                  content = NULL,
+                                  filepath = rlang::missing_arg(),
+                                  content = rlang::missing_arg(),
                                   cfg = FALSE,
                                   id = get_new_id(),
                                   filetoken = get_filetoken(filepath, content)) {
-  if (is.null(filepath) && is.null(content)) {
-    stop("Either filepath or content must be provided")
-  }
-  if (!is.null(filepath) && !is.null(content)) {
-    stop("filepath and content cannot be provided at the same time")
-  }
+  stopifnot(rlang::is_missing(filepath) || rlang::is_missing(content), !rlang::is_missing(filepath) || !rlang::is_missing(content))
 
-  if (!is.null(filepath)) {
+  if (!rlang::is_missing(filepath)) {
+    stopifnot(is.character(filepath))
     filepath <- normalizePath(filepath, mustWork = FALSE)
     filetoken <- get_filetoken(filepath)
     request <- fromRJSON('{
@@ -39,7 +35,8 @@ request_file_analysis <- function(con,
       "filepath":  "%s",
       "cfg":       %s
     }', id, filetoken, filepath, jsonlite::toJSON(cfg, auto_unbox = TRUE))
-  } else if (!is.null(content)) {
+  } else if (!rlang::is_missing(content)) {
+    stopifnot(is.character(content))
     request <- fromRJSON('{
       "type":      "request-file-analysis",
       "id":        "%s",
