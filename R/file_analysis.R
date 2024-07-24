@@ -1,6 +1,3 @@
-source("R/connect.R")
-source("R/utils.R")
-
 #' Sends a ["file-analysis"](https://github.com/flowr-analysis/flowr/wiki/Interface#the-analysis-request) request
 #'
 #' Note that either `filepath` or `content` must be provided, but never both.

@@ -1,6 +1,3 @@
-source("R/connect.R")
-source("R/utils.R")
-
 #' Sends a ["request-repl-execution"](https://github.com/flowr-analysis/flowr/wiki/Interface#the-repl-request) request
 #'
 #' @param con The connection to the server
