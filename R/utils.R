@@ -1,4 +1,9 @@
-fromRJSON <- function(x, ...) {
+#' Create a R object from a JSON string. Can be used similar to `sprintf`.
+#'
+#' @param x The JSON string (with placeholders)
+#' @param ... The values to be inserted into the placeholders
+#' @return The R object
+from_json_string <- function(x, ...) {
   return(jsonlite::fromJSON(sprintf(x, ...),
     simplifyVector = FALSE,
     simplifyDataFrame = FALSE,
