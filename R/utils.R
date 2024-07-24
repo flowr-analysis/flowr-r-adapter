@@ -13,11 +13,11 @@ handle_err_result <- function(res) {
   return(FALSE)
 }
 
-next_id <- 0
-get_new_id <- function() {
-  # next_id <<- next_id + 1
-  return(next_id)
+make_id_provider <- function(next_id = 0) {
+  function()
+    next_id <<- next_id + 1
 }
+get_new_id <- make_id_provider()
 
 get_filetoken <- function(filepath = NULL, content = NULL) {
   if (!is.null(filepath)) {
