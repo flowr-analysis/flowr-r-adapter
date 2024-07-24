@@ -6,11 +6,11 @@
 \usage{
 request_file_analysis(
   con,
-  filepath = NULL,
-  content = NULL,
+  filepath = rlang::missing_arg(),
+  content = rlang::missing_arg(),
   cfg = FALSE,
   id = get_new_id(),
-  filetoken = get_filetoken(content)
+  filetoken = get_filetoken(filepath, content)
 )
 }
 \arguments{
