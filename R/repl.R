@@ -12,11 +12,11 @@ source("R/utils.R")
 #'
 #' @export
 request_repl <- function(con, expression, id = get_new_id()) {
-  request <- fromRJSON('{
-    "type":       "request-repl-execution",
-    "id":         "%s",
-    "expression": "%s",
-  }', id, expression)
+  request <- list(
+    type = "request-repl-execution",
+    id = id,
+    expression = expression
+  )
   res <- send_request(con, request)
 
   return(list(id = id, res = res))

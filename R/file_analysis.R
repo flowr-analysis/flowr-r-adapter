@@ -28,22 +28,22 @@ request_file_analysis <- function(con,
     stopifnot(is.character(filepath))
     filepath <- normalizePath(filepath, mustWork = FALSE)
     filetoken <- get_filetoken(filepath)
-    request <- fromRJSON('{
-      "type":      "request-file-analysis",
-      "id":        "%s",
-      "filetoken": "%s",
-      "filepath":  "%s",
-      "cfg":       %s
-    }', id, filetoken, filepath, jsonlite::toJSON(cfg, auto_unbox = TRUE))
+    request <- list(
+      type = "request-file-analysis",
+      id = id,
+      filetoken = filetoken,
+      filepath = filepath,
+      cfg = cfg
+    )
   } else if (!rlang::is_missing(content)) {
     stopifnot(is.character(content))
-    request <- fromRJSON('{
-      "type":      "request-file-analysis",
-      "id":        "%s",
-      "filetoken": "%s",
-      "content":   "%s",
-      "cfg":       %s
-    }', id, filetoken, content, jsonlite::toJSON(cfg, auto_unbox = TRUE))
+    request <- list(
+      type = "request-file-analysis",
+      id = id,
+      filetoken = filetoken,
+      content = content,
+      cfg = cfg
+    )
   }
 
   res <- send_request(con, request)

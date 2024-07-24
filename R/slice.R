@@ -15,12 +15,13 @@ source("R/utils.R")
 #'
 #' @export
 request_slice <- function(con, filetoken, criteria, id = get_new_id()) {
-  request <- fromRJSON('{
-    "type":      "request-slice",
-    "id":        "%s",
-    "filetoken": "%s",
-    "criterion": %s
-  }', filetoken, jsonlite::toJSON(criteria))
+  request <- list(
+    type = "request-slice",
+    id = id,
+    filetoken = filetoken,
+    # TODO: prevent auto unboxing if there's only one criterion
+    criterion = criteria
+  )
   res <- send_request(con, request)
 
   if (handle_err_result(res)) {
