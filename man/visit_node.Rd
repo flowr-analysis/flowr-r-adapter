@@ -7,9 +7,9 @@
 visit_node(node, callback)
 }
 \arguments{
-\item{callback}{The callback function to invoke for each node}
+\item{node}{The node to visit}
 
-\item{nodes}{The node to visit}
+\item{callback}{The callback function to invoke for each node}
 }
 \description{
 Visits the given node and all of their children, invoking the callback for each visited node

@@ -1,7 +1,11 @@
-# TODO this is still undocumented :(
-
-#' @export
-install_node <- function(node_ver, verbose = FALSE, node_base_dir = get_default_node_base_dir()) {
+#' Installs the given version of Node.js on the local system in the given directory.
+#'
+#' @param node_ver The versino of Node to install
+#' @param verbose Whether to print out information about the commands being executed.
+#' @param base_dir The base directory to install Node in. By default, this uses the package's installation directory through [get_default_node_base_dir()].
+#'
+#' #' @export
+install_node <- function(node_ver, verbose = FALSE, base_dir = get_default_node_base_dir()) {
   os <- get_os()
   arch <- switch(Sys.info()[["machine"]],
     "x86-64" = "x64",
@@ -12,20 +16,20 @@ install_node <- function(node_ver, verbose = FALSE, node_base_dir = get_default_
   )
 
   if (verbose) {
-    print(paste0("Installing node ", node_ver, " in ", node_base_dir))
+    print(paste0("Installing node ", node_ver, " in ", base_dir))
   }
 
-  if (dir.exists(node_base_dir)) {
-    unlink(node_base_dir, recursive = TRUE)
+  if (dir.exists(base_dir)) {
+    unlink(base_dir, recursive = TRUE)
     if (verbose) {
       print("Removing old node installation")
     }
   }
-  dir.create(node_base_dir)
+  dir.create(base_dir)
 
   # url example: https://nodejs.org/dist/v22.5.1/node-v22.5.1-win-x86.zip
   file_type <- if (os == "win") "zip" else "tar.gz"
-  node_archive_dest <- file.path(node_base_dir, paste0("node.", file_type))
+  node_archive_dest <- file.path(base_dir, paste0("node.", file_type))
   node_file_name <- sprintf("node-v%s-%s-%s", node_ver, os, arch)
   utils::download.file(sprintf("https://nodejs.org/dist/v%s/%s.%s", node_ver, node_file_name, file_type), node_archive_dest)
   if (verbose) {
@@ -33,22 +37,38 @@ install_node <- function(node_ver, verbose = FALSE, node_base_dir = get_default_
   }
 
   if (file_type == "zip") {
-    utils::unzip(node_archive_dest, exdir = node_base_dir)
+    utils::unzip(node_archive_dest, exdir = base_dir)
   } else {
-    utils::untar(node_archive_dest, exdir = node_base_dir)
+    utils::untar(node_archive_dest, exdir = base_dir)
   }
   unlink(node_archive_dest)
 
   if (verbose) {
-    print(paste0("Extracted node archive to ", file.path(node_base_dir, node_file_name)))
+    print(paste0("Extracted node archive to ", file.path(base_dir, node_file_name)))
   }
 }
 
+#' Installs the given version of flowR on the local system in the given directory.
+#' This function expects Node to have been installed using [install_node()] prior.
+#'
+#' @param flowr_ver The version of flowR to install.
+#' @param verbose Whether to print out information about the commands being executed.
+#' @param base_dir The base directory that Node was installed in, and where flowR should be installed. By default, this uses the package's installation directory through [get_default_node_base_dir()].
+#' @return The return value of the [exec_node_command()] call.
+#'
 #' @export
 install_flowr <- function(flowr_ver, verbose = FALSE, base_dir = get_default_node_base_dir()) {
   exec_node_command("npm", paste0("install -g @eagleoutice/flowr@", flowr_ver), verbose, base_dir)
 }
 
+#' Executes a local version of the flowR CLI with the given arguments in the given directory.
+#' This function expects Node and flowR to have been installed using [install_node()] and [install_flowr()] prior.
+#'
+#' @param args The arguments to pass to the flowR CLI, as a character.
+#' @param verbose Whether to print out information about the commands being executed.
+#' @param base_dir The base directory that Node and flowR were installed in. By default, this uses the package's installation directory through [get_default_node_base_dir()].
+#' @return The return value of the [exec_node_command()] call.
+#'
 #' @export
 exec_flowr <- function(args, verbose = FALSE, base_dir = get_default_node_base_dir()) {
   # we installed flowr globally (see above) in the scope of our local node installation, so we can find it here
@@ -56,30 +76,44 @@ exec_flowr <- function(args, verbose = FALSE, base_dir = get_default_node_base_d
   exec_node_command("node", paste(flowr_path, args), verbose, base_dir)
 }
 
+#' Executes the given Node subcommand in the given arguments in the given directory.
+#' This function expects Node to have been installed using [install_node()].
+#'
+#' @param app The node subcommand to run, which can be one of "node", "npm", or "npx".
+#' @param args The arguments to pass to the Node command, as a character.
+#' @param verbose Whether to print out information about the commands being executed.
+#' @param base_dir The base directory that Node was installed in. By default, this uses the package's installation directory through [get_default_node_base_dir()].
+#' @return The return value of the system2 call.
+#'
 #' @export
-exec_node_command <- function(app, args, verbose = FALSE, base_dir = get_default_node_base_dir()) {
+exec_node_command <- function(app = c("node", "npm", "npx"), args, verbose = FALSE, base_dir = get_default_node_base_dir()) {
   # linux/mac have binaries in the bin subdirectory, windows has node.exe and npm/npx.cmd in the root, bleh
   path <- if (get_os() == "win") paste0(app, if (app == "node") ".exe" else ".cmd") else file.path("bin", app)
   cmd <- file.path(get_node_exe_dir(base_dir), path)
   if (verbose) {
     print(paste0("Executing ", cmd, " ", paste0(args, collapse = " ")))
   }
-  system2(cmd, args)
+  return(system2(cmd, args))
 }
 
+#' Returns the default node base directory to use when installing Node, which is the directory that the package with the given name is installed in.
+#'
+#' @param pkg_dir_name The name of the package to find the installation directory of. By default, this is "flowr", the name of this package.
+#' @return The default base directory to use when installing Node.
+#'
 #' @export
-get_default_node_base_dir <- function(addin_dir_name = "flowradapter") {
+get_default_node_base_dir <- function(pkg_dir_name = "flowr") {
   # we find the directory to install node into by finding the directory that
   # the currently running instance of the package is (likely) installed in.
   # this may seem like a terrible solution but it's the best one i could come up with :(
   for (path in .libPaths()) {
     for (dir in list.dirs(path, full.names = FALSE, recursive = FALSE)) {
-      if (dir == addin_dir_name) {
+      if (dir == pkg_dir_name) {
         return(file.path(path, dir, "_node"))
       }
     }
   }
-  stop(paste0("Could not find ", addin_dir_name, " directory in any libPaths"))
+  stop(paste0("Could not find ", pkg_dir_name, " directory in any libPaths"))
 }
 
 get_node_exe_dir <- function(base_dir) {

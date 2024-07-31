@@ -2,6 +2,10 @@
 
 #' Connects to a running flowR server at the given host and port
 #'
+#' @param host The host to connect to. By default, this is "localhost".
+#' @param port The port to connect to. By default, this is 1042.
+#' @param blocking Whether to use blocking mode for the connection.
+#'
 #' @seealso [send_request()]
 #' @seealso [disconnect()]
 #'
@@ -16,6 +20,9 @@ connect <- function(host = "localhost", port = 1042, blocking = TRUE) {
 }
 
 #' Sends a JSON request to the running flowR server, if connected
+#'
+#' @param connection The connection to use when sending the request.
+#' @param command The command to send, as a named list representing the key-value pairs to set in the JSON request.
 #'
 #' @seealso [connect()]
 #' @seealso [disconnect()]
@@ -35,6 +42,8 @@ send_request <- function(connection, command) {
 }
 
 #' Closes an active connection to a flowR server, if connected
+#'
+#' @param connection The connection to close.
 #'
 #' @seealso [connect()]
 #' @seealso [send_request()]

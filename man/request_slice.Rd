@@ -23,7 +23,7 @@ A list containing the id and the response
 Sends a \href{https://github.com/flowr-analysis/flowr/wiki/Interface#the-slice-request}{"request-slice"} request
 }
 \seealso{
-\code{\link[=initiate_file_analysis]{initiate_file_analysis()}}
+\code{\link[=request_file_analysis]{request_file_analysis()}}
 
 \code{\link[=connect]{connect()}}
 }

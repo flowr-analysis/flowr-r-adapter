@@ -6,6 +6,9 @@
 \usage{
 disconnect(connection)
 }
+\arguments{
+\item{connection}{The connection to close.}
+}
 \description{
 Closes an active connection to a flowR server, if connected
 }

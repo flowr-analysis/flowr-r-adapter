@@ -14,7 +14,7 @@ visit_nodes <- function(nodes, callback) {
 
 #' Visits the given node and all of their children, invoking the callback for each visited node
 #'
-#' @param nodes The node to visit
+#' @param node The node to visit
 #' @param callback The callback function to invoke for each node
 #'
 #' @export

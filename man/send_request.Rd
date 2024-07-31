@@ -6,6 +6,11 @@
 \usage{
 send_request(connection, command)
 }
+\arguments{
+\item{connection}{The connection to use when sending the request.}
+
+\item{command}{The command to send, as a named list representing the key-value pairs to set in the JSON request.}
+}
 \description{
 Sends a JSON request to the running flowR server, if connected
 }

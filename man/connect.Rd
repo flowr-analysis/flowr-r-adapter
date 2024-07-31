@@ -6,6 +6,13 @@
 \usage{
 connect(host = "localhost", port = 1042, blocking = TRUE)
 }
+\arguments{
+\item{host}{The host to connect to. By default, this is "localhost".}
+
+\item{port}{The port to connect to. By default, this is 1042.}
+
+\item{blocking}{Whether to use blocking mode for the connection.}
+}
 \description{
 Connects to a running flowR server at the given host and port
 }

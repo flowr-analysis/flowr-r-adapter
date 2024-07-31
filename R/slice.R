@@ -7,7 +7,7 @@
 #' @param id The id of the request
 #' @return A list containing the id and the response
 #'
-#' @seealso [initiate_file_analysis()]
+#' @seealso [request_file_analysis()]
 #' @seealso [connect()]
 #'
 #' @export
