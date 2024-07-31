@@ -4,7 +4,7 @@
 #' @param verbose Whether to print out information about the commands being executed.
 #' @param base_dir The base directory to install Node in. By default, this uses the package's installation directory through [get_default_node_base_dir()].
 #'
-#' #' @export
+#' @export
 install_node <- function(node_ver, verbose = FALSE, base_dir = get_default_node_base_dir()) {
   os <- get_os()
   arch <- switch(Sys.info()[["machine"]],

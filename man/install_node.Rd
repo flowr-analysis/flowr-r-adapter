@@ -11,9 +11,7 @@ install_node(node_ver, verbose = FALSE, base_dir = get_default_node_base_dir())
 
 \item{verbose}{Whether to print out information about the commands being executed.}
 
-\item{base_dir}{The base directory to install Node in. By default, this uses the package's installation directory through \code{\link[=get_default_node_base_dir]{get_default_node_base_dir()}}.
-
-#' @export}
+\item{base_dir}{The base directory to install Node in. By default, this uses the package's installation directory through \code{\link[=get_default_node_base_dir]{get_default_node_base_dir()}}.}
 }
 \description{
 Installs the given version of Node.js on the local system in the given directory.
