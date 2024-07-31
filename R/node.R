@@ -27,15 +27,15 @@ install_node <- function(node_ver, verbose = FALSE, node_base_dir = get_default_
   file_type <- if (os == "win") "zip" else "tar.gz"
   node_archive_dest <- file.path(node_base_dir, paste0("node.", file_type))
   node_file_name <- sprintf("node-v%s-%s-%s", node_ver, os, arch)
-  download.file(sprintf("https://nodejs.org/dist/v%s/%s.%s", node_ver, node_file_name, file_type), node_archive_dest)
+  utils::download.file(sprintf("https://nodejs.org/dist/v%s/%s.%s", node_ver, node_file_name, file_type), node_archive_dest)
   if (verbose) {
     print(paste0("Downloaded node archive to ", node_archive_dest))
   }
 
   if (file_type == "zip") {
-    unzip(node_archive_dest, exdir = node_base_dir)
+    utils::unzip(node_archive_dest, exdir = node_base_dir)
   } else {
-    untar(node_archive_dest, exdir = node_base_dir)
+    utils::untar(node_archive_dest, exdir = node_base_dir)
   }
   unlink(node_archive_dest)
 
