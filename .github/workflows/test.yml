@@ -10,7 +10,6 @@ jobs:
       # currently, we expect the adapter to work with most of the same versions as flowr itself
       # see https://github.com/flowr-analysis/flowr/blob/main/.github/workflows/full-test.yaml#L20
       matrix:
-        fail-fast: false
         r-version: [ '4.4.0', '4.3.2', '4.2.3', '4.0.0' ]
         os: [ ubuntu-latest ]
         include:
@@ -18,6 +17,7 @@ jobs:
              r-version: '4.4.0'
            - os: windows-latest
              r-version: '4.4.0'
+      fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
