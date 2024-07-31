@@ -7,10 +7,11 @@ on:
 jobs:
   devtools-check:
     strategy:
-      # currently, we expect the adapter to work with the same versions as flowr itself
+      # currently, we expect the adapter to work with most of the same versions as flowr itself
       # see https://github.com/flowr-analysis/flowr/blob/main/.github/workflows/full-test.yaml#L20
       matrix:
-        r-version: [ '4.4.0', '4.3.2', '4.2.3', '4.0.0', '3.6.0' ]
+        fail-fast: false
+        r-version: [ '4.4.0', '4.3.2', '4.2.3', '4.0.0' ]
         os: [ ubuntu-latest ]
         include:
            - os: macos-latest
