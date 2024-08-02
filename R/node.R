@@ -12,6 +12,7 @@ install_node <- function(node_ver, verbose = FALSE, base_dir = get_default_node_
     "x86_64" = "x64",
     "x86-32" = "x86",
     "x86_32" = "x86",
+    "arm64" = "arm64",
     stop(paste0("Unsupported architecture ", Sys.info()[["machine"]]))
   )
 
