@@ -6,5 +6,5 @@ test_that("install node", {
   expect_no_error(install_node("22.5.1"))
 })
 test_that("install flowr", {
-  expect_no_error(install_flowr("2.0.11"))
+  expect_equal(install_flowr("2.0.11"), 0)
 })
