@@ -24,8 +24,11 @@ get_new_id <- make_id_provider()
 #' @return The token
 get_filetoken <- function(filepath = rlang::missing_arg(), content = rlang::missing_arg()) {
   if (!rlang::is_missing(filepath)) {
-    stopifnot(is.character(filepath), file.exists(filepath))
-    token <- digest::digest(readLines(filepath))
+    stopifnot(is.character(filepath) || is.vector(filepath))
+    # sort to ensure that a different order will result in the same token
+    filepath <- sort(c(filepath))
+    stopifnot(file.exists(filepath))
+    token <- digest::digest(lapply(filepath, readLines))
   } else if (!rlang::is_missing(content)) {
     stopifnot(is.character(content))
     token <- digest::digest(content)
