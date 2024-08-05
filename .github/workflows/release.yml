@@ -47,7 +47,10 @@ jobs:
           MESSAGE: ${{ github.event.head_commit.message }}
 
       - name: CRAN Release
-        run: Rscript -e 'devtools::submit_cran()'
+        run: |
+R --no-save --ess --interactive << EOF
+devtools::submit_cran()
+EOF
 
       - name: GitHub release
        run: Rscript -e 'usethis::use_github_release()'
