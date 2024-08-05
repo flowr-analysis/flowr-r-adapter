@@ -50,4 +50,4 @@ jobs:
         run: Rscript -e 'devtools::submit_cran()'
 
       - name: GitHub release
-       run: Rscript -e 'use_github_release()'
+       run: Rscript -e 'usethis::use_github_release()'
