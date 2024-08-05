@@ -16,7 +16,7 @@ request_file_analysis(
 \arguments{
 \item{con}{The connection to the server}
 
-\item{filepath}{The path to the file (must be visible to the server)}
+\item{filepath}{A single or multiple file paths (must be visible to the server)}
 
 \item{content}{The R code to be analyzed}
 

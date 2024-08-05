@@ -3,7 +3,7 @@
 #' Note that either `filepath` or `content` must be provided, but never both.
 #'
 #' @param con The connection to the server
-#' @param filepath The path to the file (must be visible to the server)
+#' @param filepath A single or multiple file paths (must be visible to the server)
 #' @param content The R code to be analyzed
 #' @param cfg Weather to include the control flow graph in the response
 #' @param id The id of the request
@@ -22,7 +22,7 @@ request_file_analysis <- function(con,
   stopifnot(rlang::is_missing(filepath) || rlang::is_missing(content), !rlang::is_missing(filepath) || !rlang::is_missing(content))
 
   if (!rlang::is_missing(filepath)) {
-    stopifnot(is.character(filepath))
+    stopifnot(is.character(filepath) || is.vector(filepath))
     filepath <- normalizePath(filepath, mustWork = FALSE)
     filetoken <- get_filetoken(filepath)
     request <- list(
