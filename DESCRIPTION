@@ -12,7 +12,8 @@ RoxygenNote: 7.3.2
 Imports:
     digest,
     jsonlite,
-    rlang
-Suggests: 
+    rlang,
+    sys
+Suggests:
     testthat (>= 3.0.0)
 Config/testthat/edition: 3

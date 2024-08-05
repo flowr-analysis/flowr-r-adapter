@@ -9,20 +9,20 @@ exec_flowr(
   args,
   verbose = FALSE,
   base_dir = get_default_node_base_dir(),
-  wait = TRUE
+  background = FALSE
 )
 }
 \arguments{
-\item{args}{The arguments to pass to the flowR CLI, as a character.}
+\item{args}{The arguments to pass to the flowR CLI, as a character vector.}
 
 \item{verbose}{Whether to print out information about the commands being executed.}
 
 \item{base_dir}{The base directory that Node and flowR were installed in. By default, this uses the package's installation directory through \code{\link[=get_default_node_base_dir]{get_default_node_base_dir()}}.}
 
-\item{wait}{Whether to wait for the command to finish before returning.}
+\item{background}{Whether the command should be executed as a background process.}
 }
 \value{
-The return value of the \code{\link[=exec_node_command]{exec_node_command()}} call.
+The return value of the \code{\link[=exec_node_command]{exec_node_command()}} call, which is the exit code if background is false, or the pid if background is true.
 }
 \description{
 Executes a local version of the flowR CLI with the given arguments in the given directory.

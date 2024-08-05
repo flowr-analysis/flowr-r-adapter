@@ -59,44 +59,48 @@ install_node <- function(node_ver, verbose = FALSE, base_dir = get_default_node_
 #'
 #' @export
 install_flowr <- function(flowr_ver, verbose = FALSE, base_dir = get_default_node_base_dir()) {
-  exec_node_command("npm", paste0("install -g @eagleoutice/flowr@", flowr_ver), verbose, base_dir)
+  exec_node_command("npm", c("install", "-g", paste0("@eagleoutice/flowr@", flowr_ver)), verbose, base_dir)
 }
 
 #' Executes a local version of the flowR CLI with the given arguments in the given directory.
 #' This function expects Node and flowR to have been installed using [install_node()] and [install_flowr()] prior.
 #'
-#' @param args The arguments to pass to the flowR CLI, as a character.
+#' @param args The arguments to pass to the flowR CLI, as a character vector.
 #' @param verbose Whether to print out information about the commands being executed.
 #' @param base_dir The base directory that Node and flowR were installed in. By default, this uses the package's installation directory through [get_default_node_base_dir()].
-#' @param wait Whether to wait for the command to finish before returning.
-#' @return The return value of the [exec_node_command()] call.
+#' @param background Whether the command should be executed as a background process.
+#' @return The return value of the [exec_node_command()] call, which is the exit code if background is false, or the pid if background is true.
 #'
 #' @export
-exec_flowr <- function(args, verbose = FALSE, base_dir = get_default_node_base_dir(), wait = TRUE) {
+exec_flowr <- function(args, verbose = FALSE, base_dir = get_default_node_base_dir(), background = FALSE) {
   # we installed flowr globally (see above) in the scope of our local node installation, so we can find it here
   flowr_path <- file.path(get_node_exe_dir(base_dir), "node_modules", "@eagleoutice", "flowr", "cli", "flowr.js")
-  exec_node_command("node", paste(flowr_path, args), verbose, base_dir, wait)
+  exec_node_command("node", c(flowr_path, args), verbose, base_dir, background)
 }
 
 #' Executes the given Node subcommand in the given arguments in the given directory.
 #' This function expects Node to have been installed using [install_node()].
 #'
 #' @param app The node subcommand to run, which can be one of "node", "npm", or "npx".
-#' @param args The arguments to pass to the Node command, as a character.
+#' @param args The arguments to pass to the Node command, as a character vector.
 #' @param verbose Whether to print out information about the commands being executed.
 #' @param base_dir The base directory that Node was installed in. By default, this uses the package's installation directory through [get_default_node_base_dir()].
-#' @param wait Whether to wait for the command to finish before returning.
-#' @return The return value of the system2 call.
+#' @param background Whether the command should be executed as a background process.
+#' @return The return value of the call, which is the exit code if background is false, or the pid if background is true.
 #'
 #' @export
-exec_node_command <- function(app = c("node", "npm", "npx"), args, verbose = FALSE, base_dir = get_default_node_base_dir(), wait = TRUE) {
+exec_node_command <- function(app = c("node", "npm", "npx"), args, verbose = FALSE, base_dir = get_default_node_base_dir(), background = FALSE) {
   # linux/mac have binaries in the bin subdirectory, windows has node.exe and npm/npx.cmd in the root, bleh
   path <- if (get_os() == "win") paste0(app, if (app == "node") ".exe" else ".cmd") else file.path("bin", app)
   cmd <- file.path(get_node_exe_dir(base_dir), path)
   if (verbose) {
     print(paste0("Executing ", cmd, " ", paste0(args, collapse = " ")))
   }
-  return(system2(cmd, args, wait = wait))
+  if (background) {
+    return(sys::exec_background(cmd, args))
+  } else {
+    return(sys::exec_wait(cmd, args))
+  }
 }
 
 #' Returns the default node base directory to use when installing Node, which is the directory that the package with the given name is installed in.
