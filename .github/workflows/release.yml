@@ -48,9 +48,9 @@ jobs:
 
       - name: CRAN Release
         run: |
-R --no-save --ess --interactive << EOF
-devtools::submit_cran()
-EOF
+          R --no-save --ess --interactive << EOF
+          devtools::submit_cran()
+          EOF
 
       - name: GitHub release
        run: Rscript -e 'usethis::use_github_release()'
