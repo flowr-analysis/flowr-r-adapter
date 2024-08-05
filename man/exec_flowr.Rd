@@ -5,7 +5,12 @@
 \title{Executes a local version of the flowR CLI with the given arguments in the given directory.
 This function expects Node and flowR to have been installed using \code{\link[=install_node]{install_node()}} and \code{\link[=install_flowr]{install_flowr()}} prior.}
 \usage{
-exec_flowr(args, verbose = FALSE, base_dir = get_default_node_base_dir())
+exec_flowr(
+  args,
+  verbose = FALSE,
+  base_dir = get_default_node_base_dir(),
+  wait = TRUE
+)
 }
 \arguments{
 \item{args}{The arguments to pass to the flowR CLI, as a character.}
@@ -13,6 +18,8 @@ exec_flowr(args, verbose = FALSE, base_dir = get_default_node_base_dir())
 \item{verbose}{Whether to print out information about the commands being executed.}
 
 \item{base_dir}{The base directory that Node and flowR were installed in. By default, this uses the package's installation directory through \code{\link[=get_default_node_base_dir]{get_default_node_base_dir()}}.}
+
+\item{wait}{Whether to wait for the command to finish before returning.}
 }
 \value{
 The return value of the \code{\link[=exec_node_command]{exec_node_command()}} call.

@@ -68,13 +68,14 @@ install_flowr <- function(flowr_ver, verbose = FALSE, base_dir = get_default_nod
 #' @param args The arguments to pass to the flowR CLI, as a character.
 #' @param verbose Whether to print out information about the commands being executed.
 #' @param base_dir The base directory that Node and flowR were installed in. By default, this uses the package's installation directory through [get_default_node_base_dir()].
+#' @param wait Whether to wait for the command to finish before returning.
 #' @return The return value of the [exec_node_command()] call.
 #'
 #' @export
-exec_flowr <- function(args, verbose = FALSE, base_dir = get_default_node_base_dir()) {
+exec_flowr <- function(args, verbose = FALSE, base_dir = get_default_node_base_dir(), wait = TRUE) {
   # we installed flowr globally (see above) in the scope of our local node installation, so we can find it here
   flowr_path <- file.path(get_node_exe_dir(base_dir), "node_modules", "@eagleoutice", "flowr", "cli", "flowr.js")
-  exec_node_command("node", paste(flowr_path, args), verbose, base_dir)
+  exec_node_command("node", paste(flowr_path, args), verbose, base_dir, wait)
 }
 
 #' Executes the given Node subcommand in the given arguments in the given directory.
@@ -84,17 +85,18 @@ exec_flowr <- function(args, verbose = FALSE, base_dir = get_default_node_base_d
 #' @param args The arguments to pass to the Node command, as a character.
 #' @param verbose Whether to print out information about the commands being executed.
 #' @param base_dir The base directory that Node was installed in. By default, this uses the package's installation directory through [get_default_node_base_dir()].
+#' @param wait Whether to wait for the command to finish before returning.
 #' @return The return value of the system2 call.
 #'
 #' @export
-exec_node_command <- function(app = c("node", "npm", "npx"), args, verbose = FALSE, base_dir = get_default_node_base_dir()) {
+exec_node_command <- function(app = c("node", "npm", "npx"), args, verbose = FALSE, base_dir = get_default_node_base_dir(), wait = TRUE) {
   # linux/mac have binaries in the bin subdirectory, windows has node.exe and npm/npx.cmd in the root, bleh
   path <- if (get_os() == "win") paste0(app, if (app == "node") ".exe" else ".cmd") else file.path("bin", app)
   cmd <- file.path(get_node_exe_dir(base_dir), path)
   if (verbose) {
     print(paste0("Executing ", cmd, " ", paste0(args, collapse = " ")))
   }
-  return(system2(cmd, args))
+  return(system2(cmd, args, wait = wait))
 }
 
 #' Returns the default node base directory to use when installing Node, which is the directory that the package with the given name is installed in.

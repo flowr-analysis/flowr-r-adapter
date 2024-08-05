@@ -9,7 +9,8 @@ exec_node_command(
   app = c("node", "npm", "npx"),
   args,
   verbose = FALSE,
-  base_dir = get_default_node_base_dir()
+  base_dir = get_default_node_base_dir(),
+  wait = TRUE
 )
 }
 \arguments{
@@ -20,6 +21,8 @@ exec_node_command(
 \item{verbose}{Whether to print out information about the commands being executed.}
 
 \item{base_dir}{The base directory that Node was installed in. By default, this uses the package's installation directory through \code{\link[=get_default_node_base_dir]{get_default_node_base_dir()}}.}
+
+\item{wait}{Whether to wait for the command to finish before returning.}
 }
 \value{
 The return value of the system2 call.
