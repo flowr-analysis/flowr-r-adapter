@@ -42,18 +42,12 @@ jobs:
           fi
 
           Rscript -e "usethis::use_version(\"$step\", push = TRUE)"
-
-          new_version=$(sed -n -E "s/Version: (.*)/\1/p" DESCRIPTION)
-          echo "::set-output name=release_tag::$new_version"
         env:
           # putting the message into an env variable first sanitizes it
           MESSAGE: ${{ github.event.head_commit.message }}
 
       - name: CRAN Release
-        run: Rscript -e 'devtools::release()'
+        run: Rscript -e 'devtools::submit_cran()'
 
       - name: GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ secrets.RELEASE_TOKEN }}
-          tag_name: ${{ steps.version.outputs.release_tag }}
+       run: Rscript -e 'use_github_release()'
