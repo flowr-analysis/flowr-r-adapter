@@ -46,11 +46,5 @@ jobs:
           # putting the message into an env variable first sanitizes it
           MESSAGE: ${{ github.event.head_commit.message }}
 
-      - name: CRAN Release
-        run: |
-          R --no-save --ess --interactive << EOF
-          devtools::submit_cran()
-          EOF
-
       - name: GitHub release
         run: Rscript -e 'usethis::use_github_release()'
