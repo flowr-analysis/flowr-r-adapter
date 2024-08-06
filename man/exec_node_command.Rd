@@ -9,20 +9,23 @@ exec_node_command(
   app = c("node", "npm", "npx"),
   args,
   verbose = FALSE,
-  base_dir = get_default_node_base_dir()
+  base_dir = get_default_node_base_dir(),
+  background = FALSE
 )
 }
 \arguments{
 \item{app}{The node subcommand to run, which can be one of "node", "npm", or "npx".}
 
-\item{args}{The arguments to pass to the Node command, as a character.}
+\item{args}{The arguments to pass to the Node command, as a character vector.}
 
 \item{verbose}{Whether to print out information about the commands being executed.}
 
 \item{base_dir}{The base directory that Node was installed in. By default, this uses the package's installation directory through \code{\link[=get_default_node_base_dir]{get_default_node_base_dir()}}.}
+
+\item{background}{Whether the command should be executed as a background process.}
 }
 \value{
-The return value of the system2 call.
+The return value of the call, which is the exit code if background is false, or the pid if background is true.
 }
 \description{
 Executes the given Node subcommand in the given arguments in the given directory.

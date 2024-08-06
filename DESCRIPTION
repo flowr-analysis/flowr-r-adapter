@@ -8,11 +8,12 @@ Description: Interact with flowR directly from R.
 License: GPL-3 + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.1
+RoxygenNote: 7.3.2
 Imports:
     digest,
     jsonlite,
-    rlang
+    rlang,
+    sys
 Suggests:
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
