@@ -49,7 +49,7 @@ jobs:
       - name: Commit and push
         run: |
           new_version=$(sed -n -E "s/Version: (.*)/\1/p" DESCRIPTION)
-          git commit -m "[skip ci] Release $new_version"
+          git commit -a -m "[skip ci] Release $new_version"
           git push
 
       - name: GitHub release
