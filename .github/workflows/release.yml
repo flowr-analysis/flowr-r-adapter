@@ -33,7 +33,6 @@ jobs:
           extra-packages: devtools, usethis
 
       - name: Bump version
-        id: version
         run: |
           step=$(echo "$MESSAGE" | sed -n -E 's/\[release:(patch|minor|major)].*/\1/p')
           if [ -z "$step" ]; then
@@ -41,10 +40,17 @@ jobs:
             exit 1
           fi
 
-          Rscript -e "usethis::use_version(\"$step\", push = TRUE)"
+          Rscript -e "usethis::use_version(\"$step\")"
         env:
           # putting the message into an env variable first sanitizes it
           MESSAGE: ${{ github.event.head_commit.message }}
+
+      # we have to do this manually since use_version only commits and pushes if it's interactive for some reason
+      - name: Commit and push
+        run: |
+          new_version=$(sed -n -E "s/Version: (.*)/\1/p" DESCRIPTION)
+          git commit -m "[skip ci] Release $new_version"
+          git push
 
       - name: GitHub release
         run: Rscript -e 'usethis::use_github_release()'
