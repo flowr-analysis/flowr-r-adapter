@@ -1,10 +1,3 @@
-handle_err_result <- function(res) {
-  if (res$type == "error") {
-    return(TRUE)
-  }
-  return(FALSE)
-}
-
 make_id_provider <- function(next_id = 0) {
   function() {
     next_id <<- next_id + 1

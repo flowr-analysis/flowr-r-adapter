@@ -20,8 +20,8 @@ request_slice <- function(con, filetoken, criteria, id = get_new_id()) {
   )
   res <- send_request(con, request)
 
-  if (handle_err_result(res)) {
-    return(NULL)
+  if (res$type == "error") {
+    return(list(error = res$reason))
   }
 
   return(list(id = id, res = res))
