@@ -45,8 +45,8 @@ request_file_analysis <- function(con,
 
   res <- send_request(con, request)
 
-  if (handle_err_result(res)) {
-    return(NULL)
+  if (res$type == "error") {
+    return(list(error = res$reason))
   }
 
   return(list(id = id, filetoken = filetoken, res = res))
