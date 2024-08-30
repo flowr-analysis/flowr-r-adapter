@@ -23,7 +23,11 @@ visit_node <- function(node, callback) {
     return()
   }
 
-  callback(node)
+  res <- callback(node)
+  # Exit early if the callback returns FALSE
+  if (isFALSE(res)) {
+    return()
+  }
 
   # same logic as the builtin visitor (while explicitly specifying if an entry is a single node or a list)
   # https://github.com/Code-Inspect/flowr/blob/main/src/r-bridge/lang-4.x/ast/model/processing/visitor.ts#L22
