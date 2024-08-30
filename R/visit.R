@@ -3,11 +3,16 @@
 #' @param nodes The list or array of nodes to visit
 #' @param callback The callback function to invoke for each node. The callback should return FALSE to stop visiting the children of the node, or anything else to continue.
 #'
+#' @return FALSE if the visitor was stopped by the callback.
+#'
 #' @export
 visit_nodes <- function(nodes, callback) {
   if (!is.null(nodes)) {
     for (node in nodes) {
-      visit_node(node, callback)
+      res <- visit_node(node, callback)
+      if (isFALSE(res)) {
+        return(FALSE)
+      }
     }
   }
 }
@@ -16,6 +21,8 @@ visit_nodes <- function(nodes, callback) {
 #'
 #' @param node The node to visit
 #' @param callback The callback function to invoke for each node. The callback should return FALSE to stop visiting the children of the node, or anything else to continue.
+#'
+#' @return FALSE if the visitor was stopped by the callback.
 #'
 #' @export
 visit_node <- function(node, callback) {
@@ -26,7 +33,7 @@ visit_node <- function(node, callback) {
   res <- callback(node)
   # Exit early if the callback returns FALSE
   if (isFALSE(res)) {
-    return()
+    return(FALSE)
   }
 
   # same logic as the builtin visitor (while explicitly specifying if an entry is a single node or a list)
