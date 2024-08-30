@@ -1,7 +1,7 @@
 #' Visits the set of nodes and all of their children, invoking the callback for each visited node
 #'
 #' @param nodes The list or array of nodes to visit
-#' @param callback The callback function to invoke for each node
+#' @param callback The callback function to invoke for each node. The callback should return TRUE to continue visiting the children of the node, or FALSE to stop visiting the children of the node.
 #'
 #' @export
 visit_nodes <- function(nodes, callback) {
@@ -15,7 +15,7 @@ visit_nodes <- function(nodes, callback) {
 #' Visits the given node and all of their children, invoking the callback for each visited node
 #'
 #' @param node The node to visit
-#' @param callback The callback function to invoke for each node
+#' @param callback The callback function to invoke for each node. The callback should return TRUE to continue visiting the children of the node, or FALSE to stop visiting the children of the node.
 #'
 #' @export
 visit_node <- function(node, callback) {
