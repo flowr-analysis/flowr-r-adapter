@@ -9,7 +9,7 @@ visit_nodes(nodes, callback)
 \arguments{
 \item{nodes}{The list or array of nodes to visit}
 
-\item{callback}{The callback function to invoke for each node. The callback should return TRUE to continue visiting the children of the node, or FALSE to stop visiting the children of the node.}
+\item{callback}{The callback function to invoke for each node. The callback should return FALSE to stop visiting the children of the node, or anything else to continue.}
 }
 \description{
 Visits the set of nodes and all of their children, invoking the callback for each visited node
