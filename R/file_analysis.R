@@ -42,12 +42,5 @@ request_file_analysis <- function(con,
       cfg = cfg
     )
   }
-
-  res <- send_request(con, request)
-
-  if (res$type == "error") {
-    return(list(error = res$reason))
-  }
-
-  return(list(id = id, filetoken = filetoken, res = res))
+  return(send_request_handle_response(con, request))
 }
