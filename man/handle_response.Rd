@@ -11,6 +11,14 @@ handle_response(res)
 }
 \value{
 A list with either the error's reason or the complete response
+\describe{
+\item{id}{The ID of the response (only in case of success).}
+\item{res}{The complete response object (only in case of success).}
+}
+or
+\describe{
+\item{error}{The reason for the error (only present in case of an error).}
+}
 }
 \description{
 The function always returns a list with the response's ID. In case of an

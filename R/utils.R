@@ -40,6 +40,14 @@ get_filetoken <- function(filepath = rlang::missing_arg(), content = rlang::miss
 #' @param res The response to handle
 #'
 #' @return A list with either the error's reason or the complete response
+#' \describe{
+#'   \item{id}{The ID of the response (only in case of success).}
+#'   \item{res}{The complete response object (only in case of success).}
+#' }
+#' or
+#' \describe{
+#'   \item{error}{The reason for the error (only present in case of an error).}
+#' }
 #'
 #' @seealso [send_request()]
 handle_response <- function(res) {
