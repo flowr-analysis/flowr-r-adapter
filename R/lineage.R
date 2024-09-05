@@ -19,11 +19,5 @@ request_lineage <- function(con, filetoken, criterion, id = get_new_id()) {
     filetoken = filetoken,
     criterion = criterion
   )
-  res <- send_request(con, request)
-
-  if (res$type == "error") {
-    return(list(error = res$reason))
-  }
-
-  return(list(id = id, res = res))
+  return(send_request_handle_response(con, request))
 }

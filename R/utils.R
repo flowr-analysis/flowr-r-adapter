@@ -30,3 +30,40 @@ get_filetoken <- function(filepath = rlang::missing_arg(), content = rlang::miss
   }
   return(token)
 }
+
+#' Checks if the given response was successful or not.
+#'
+#' The function always returns a list with the response's ID. In case of an
+#' error, the list also contains the errors reason. In case of a successful
+#' response, the list also contains the complete response.
+#'
+#' @param res The response to handle
+#'
+#' @return A list with either the error's reason or the complete response
+#' \describe{
+#'   \item{id}{The ID of the response (only in case of success).}
+#'   \item{res}{The complete response object (only in case of success).}
+#' }
+#' or
+#' \describe{
+#'   \item{error}{The reason for the error (only present in case of an error).}
+#' }
+#'
+#' @seealso [send_request()]
+handle_response <- function(res) {
+  if (res$type == "error") {
+    return(list(error = res$reason))
+  }
+  return(list(id = res$id, res = res))
+}
+
+#' Send the given request over the given connection and handle a possible error
+#'
+#' @param con The connection to use
+#' @param request The request to send
+#'
+#' @return See [handle_response()] for possible return values
+send_request_handle_response <- function(con, request) {
+  res <- send_request(con, request)
+  return(handle_response(res))
+}
