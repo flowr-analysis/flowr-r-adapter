@@ -42,5 +42,8 @@ request_file_analysis <- function(con,
       cfg = cfg
     )
   }
-  return(send_request_handle_response(con, request))
+  return(c(
+    send_request_handle_response(con, request),
+    list(filetoken = filetoken)
+  ))
 }
