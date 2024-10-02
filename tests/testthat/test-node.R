@@ -3,14 +3,14 @@ test_that("find package directory", {
 })
 test_that("install node", {
   options(timeout = 300)
-  expect_no_error(install_node("22.5.1"))
+  expect_no_error(install_node("22.5.1", TRUE))
 })
 test_that("install flowr", {
   flowr_version <- "2.0.11"
-  expect_equal(install_flowr(flowr_version), 0)
+  expect_equal(install_flowr(flowr_version, TRUE), 0)
 
   # test if the installation was actually successful
-  pid <- exec_flowr("--server", background = TRUE)
+  pid <- exec_flowr("--server", verbose = TRUE, background = TRUE)
   on.exit(tools::pskill(pid), add = TRUE, after = FALSE)
   conn_hello <- connect()
   on.exit(flowr::disconnect(conn_hello[[1]]), add = TRUE, after = FALSE)
