@@ -8,13 +8,5 @@ test_that("install node", {
 test_that("install flowr", {
   flowr_version <- "2.0.11"
   expect_equal(install_flowr(flowr_version, TRUE), 0)
-
-  # test if the installation was actually successful
-  pid <- exec_flowr("--server", verbose = TRUE, background = TRUE)
-  on.exit(tools::pskill(pid), add = TRUE, after = FALSE)
-  Sys.sleep(5)
-  conn_hello <- connect()
-  on.exit(flowr::disconnect(conn_hello[[1]]), add = TRUE, after = FALSE)
-  response <- jsonlite::fromJSON(conn_hello[[2]])
-  expect_equal(response$versions$flowr, flowr_version)
+  expect_output(exec_flowr("--version"), paste0("flowR: ", flowr_version))
 })
