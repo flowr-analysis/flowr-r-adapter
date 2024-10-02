@@ -12,6 +12,7 @@ test_that("install flowr", {
   # test if the installation was actually successful
   pid <- exec_flowr("--server", verbose = TRUE, background = TRUE)
   on.exit(tools::pskill(pid), add = TRUE, after = FALSE)
+  Sys.sleep(5)
   conn_hello <- connect()
   on.exit(flowr::disconnect(conn_hello[[1]]), add = TRUE, after = FALSE)
   response <- jsonlite::fromJSON(conn_hello[[2]])
