@@ -59,7 +59,7 @@ install_node <- function(node_ver, verbose = FALSE, base_dir = get_default_node_
 #'
 #' @export
 install_flowr <- function(flowr_ver, verbose = FALSE, base_dir = get_default_node_base_dir()) {
-  exec_node_command("npm", c("install", "-g", paste0("@eagleoutice/flowr@", flowr_ver)), verbose, base_dir)
+  exec_node_command("npm", c("install", "-g", paste0("--prefix=", get_node_exe_dir(base_dir)), paste0("@eagleoutice/flowr@", flowr_ver)), verbose, base_dir)
 }
 
 #' Executes a local version of the flowR CLI with the given arguments in the given directory.
