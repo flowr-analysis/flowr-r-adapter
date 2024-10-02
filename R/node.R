@@ -74,7 +74,8 @@ install_flowr <- function(flowr_ver, verbose = FALSE, base_dir = get_default_nod
 #' @export
 exec_flowr <- function(args, verbose = FALSE, base_dir = get_default_node_base_dir(), background = FALSE) {
   # we installed flowr globally (see above) in the scope of our local node installation, so we can find it here
-  flowr_path <- file.path(get_node_exe_dir(base_dir), "node_modules", "@eagleoutice", "flowr", "cli", "flowr.js")
+  node_modules <- if (get_os() == "win") "node_modules" else file.path("lib", "node_modules")
+  flowr_path <- file.path(get_node_exe_dir(base_dir), node_modules, "@eagleoutice", "flowr", "cli", "flowr.js")
   exec_node_command("node", c(flowr_path, args), verbose, base_dir, background)
 }
 

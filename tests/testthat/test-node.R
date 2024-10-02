@@ -3,8 +3,8 @@ test_that("find package directory", {
 })
 test_that("install node", {
   options(timeout = 300)
-  expect_no_error(install_node("22.5.1"))
+  expect_no_error(install_node("22.9.0", TRUE))
 })
 test_that("install flowr", {
-  expect_equal(install_flowr("2.0.11"), 0)
+  expect_equal(install_flowr("2.0.11", TRUE), 0)
 })
