@@ -32,8 +32,6 @@ jobs:
         uses: r-lib/actions/setup-r-dependencies@v2
         with:
           extra-packages: devtools
-      - name: Install docker
-        uses: crazy-max/ghaction-setup-docker@v3
       - name: Run devtools::check()
         # error on any type of notice from the check
         run: Rscript -e 'devtools::check(error_on = "note")'
