@@ -2,7 +2,9 @@
 
 export(connect)
 export(disconnect)
+export(exec_docker_command)
 export(exec_flowr)
+export(exec_flowr_docker)
 export(exec_node_command)
 export(get_default_node_base_dir)
 export(install_flowr)
