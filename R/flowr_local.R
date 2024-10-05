@@ -79,6 +79,22 @@ exec_flowr <- function(args, verbose = FALSE, base_dir = get_default_node_base_d
   exec_node_command("node", c(flowr_path, args), verbose, base_dir, background)
 }
 
+#' Executes a local version of the flowR CLI with the given arguments in the given directory.
+#' This function expects docker to exist on the system.
+#'
+#' @param docker_args Additional arguments to pass to docker, as a character vector.
+#' @param flowr_ver The version of flowR to use
+#' @param flowr_args The arguments to pass to the flowR CLI, as a character vector.
+#' @param verbose Whether to print out information about the commands being executed.
+#' @param cmd The command to use for docker. Defaults to "docker".
+#' @param background Whether the command should be executed as a background process.
+#' @return The return value of the [exec_node_command()] call, which is the exit code if background is false, or the pid if background is true.
+#'
+#' @export
+exec_flowr_docker <- function(docker_args, flowr_ver, flowr_args, verbose = FALSE, cmd = "docker", background = FALSE) {
+  exec_docker_command(c("run", "--rm", docker_args, paste0("eagleoutice/flowr:", flowr_ver), flowr_args), verbose, cmd, background)
+}
+
 #' Executes the given Node subcommand in the given arguments in the given directory.
 #' This function expects Node to have been installed using [install_node()].
 #'
@@ -94,6 +110,27 @@ exec_node_command <- function(app = c("node", "npm", "npx"), args, verbose = FAL
   # linux/mac have binaries in the bin subdirectory, windows has node.exe and npm/npx.cmd in the root, bleh
   path <- if (get_os() == "win") paste0(app, if (app == "node") ".exe" else ".cmd") else file.path("bin", app)
   cmd <- file.path(get_node_exe_dir(base_dir), path)
+  if (verbose) {
+    print(paste0("Executing ", cmd, " ", paste0(args, collapse = " ")))
+  }
+  if (background) {
+    return(sys::exec_background(cmd, args))
+  } else {
+    return(sys::exec_wait(cmd, args))
+  }
+}
+
+#' Executes the given docker command in the given directory.
+#' This function expects docker to exist on the system.
+#'
+#' @param args The arguments to pass to the docker command, as a character vector.
+#' @param verbose Whether to print out information about the commands being executed.
+#' @param cmd The command to use for docker. Defaults to "docker".
+#' @param background Whether the command should be executed as a background process.
+#' @return The return value of the call, which is the exit code if background is false, or the pid if background is true.
+#'
+#' @export
+exec_docker_command <- function(args, verbose = FALSE, cmd = "docker", background = FALSE) {
   if (verbose) {
     print(paste0("Executing ", cmd, " ", paste0(args, collapse = " ")))
   }
