@@ -8,7 +8,9 @@ This function expects Node to have been installed using \code{\link[=install_nod
 install_flowr(
   flowr_ver,
   verbose = FALSE,
-  base_dir = get_default_node_base_dir()
+  base_dir = get_default_node_base_dir(),
+  std_out = TRUE,
+  std_err = TRUE
 )
 }
 \arguments{
@@ -17,6 +19,10 @@ install_flowr(
 \item{verbose}{Whether to print out information about the commands being executed.}
 
 \item{base_dir}{The base directory that Node was installed in, and where flowR should be installed. By default, this uses the package's installation directory through \code{\link[=get_default_node_base_dir]{get_default_node_base_dir()}}.}
+
+\item{std_out}{The std_out parameter passed to the sys call. See \code{\link[sys:exec]{sys::exec_background()}} and \code{\link[sys:exec]{sys::exec_wait()}} for more info.}
+
+\item{std_err}{The std_err parameter passed to the sys call. See \code{\link[sys:exec]{sys::exec_background()}} and \code{\link[sys:exec]{sys::exec_wait()}} for more info.}
 }
 \value{
 The return value of the \code{\link[=exec_node_command]{exec_node_command()}} call.

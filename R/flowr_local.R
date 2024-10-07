@@ -55,11 +55,13 @@ install_node <- function(node_ver, verbose = FALSE, base_dir = get_default_node_
 #' @param flowr_ver The version of flowR to install.
 #' @param verbose Whether to print out information about the commands being executed.
 #' @param base_dir The base directory that Node was installed in, and where flowR should be installed. By default, this uses the package's installation directory through [get_default_node_base_dir()].
+#' @param std_out The std_out parameter passed to the sys call. See [sys::exec_background()] and [sys::exec_wait()] for more info.
+#' @param std_err The std_err parameter passed to the sys call. See [sys::exec_background()] and [sys::exec_wait()] for more info.
 #' @return The return value of the [exec_node_command()] call.
 #'
 #' @export
-install_flowr <- function(flowr_ver, verbose = FALSE, base_dir = get_default_node_base_dir()) {
-  exec_node_command("npm", c("install", "-g", paste0("--prefix=", get_node_exe_dir(base_dir)), paste0("@eagleoutice/flowr@", flowr_ver)), verbose, base_dir)
+install_flowr <- function(flowr_ver, verbose = FALSE, base_dir = get_default_node_base_dir(), std_out = TRUE, std_err = TRUE) {
+  exec_node_command("npm", c("install", "-g", paste0("--prefix=", get_node_exe_dir(base_dir)), paste0("@eagleoutice/flowr@", flowr_ver)), verbose, base_dir, FALSE, std_out, std_err)
 }
 
 #' Executes a local version of the flowR CLI with the given arguments in the given directory.
@@ -69,14 +71,16 @@ install_flowr <- function(flowr_ver, verbose = FALSE, base_dir = get_default_nod
 #' @param verbose Whether to print out information about the commands being executed.
 #' @param base_dir The base directory that Node and flowR were installed in. By default, this uses the package's installation directory through [get_default_node_base_dir()].
 #' @param background Whether the command should be executed as a background process.
+#' @param std_out The std_out parameter passed to the sys call. See [sys::exec_background()] and [sys::exec_wait()] for more info.
+#' @param std_err The std_err parameter passed to the sys call. See [sys::exec_background()] and [sys::exec_wait()] for more info.
 #' @return The return value of the [exec_node_command()] call, which is the exit code if background is false, or the pid if background is true.
 #'
 #' @export
-exec_flowr <- function(args, verbose = FALSE, base_dir = get_default_node_base_dir(), background = FALSE) {
+exec_flowr <- function(args, verbose = FALSE, base_dir = get_default_node_base_dir(), background = FALSE, std_out = TRUE, std_err = TRUE) {
   # we installed flowr globally (see above) in the scope of our local node installation, so we can find it here
   node_modules <- if (get_os() == "win") "node_modules" else file.path("lib", "node_modules")
   flowr_path <- file.path(get_node_exe_dir(base_dir), node_modules, "@eagleoutice", "flowr", "cli", "flowr.js")
-  exec_node_command("node", c(flowr_path, args), verbose, base_dir, background)
+  exec_node_command("node", c(flowr_path, args), verbose, base_dir, background, std_out, std_err)
 }
 
 #' Executes a local version of the flowR CLI with the given arguments in the given directory.
@@ -88,11 +92,13 @@ exec_flowr <- function(args, verbose = FALSE, base_dir = get_default_node_base_d
 #' @param verbose Whether to print out information about the commands being executed.
 #' @param cmd The command to use for docker. Defaults to "docker".
 #' @param background Whether the command should be executed as a background process.
+#' @param std_out The std_out parameter passed to the sys call. See [sys::exec_background()] and [sys::exec_wait()] for more info.
+#' @param std_err The std_err parameter passed to the sys call. See [sys::exec_background()] and [sys::exec_wait()] for more info.
 #' @return The return value of the [exec_node_command()] call, which is the exit code if background is false, or the pid if background is true.
 #'
 #' @export
-exec_flowr_docker <- function(docker_args, flowr_ver, flowr_args, verbose = FALSE, cmd = "docker", background = FALSE) {
-  exec_docker_command(c("run", "--rm", docker_args, paste0("eagleoutice/flowr:", flowr_ver), flowr_args), verbose, cmd, background)
+exec_flowr_docker <- function(docker_args, flowr_ver, flowr_args, verbose = FALSE, cmd = "docker", background = FALSE, std_out = TRUE, std_err = TRUE) {
+  exec_docker_command(c("run", "--rm", docker_args, paste0("eagleoutice/flowr:", flowr_ver), flowr_args), verbose, cmd, background, std_out, std_err)
 }
 
 #' Executes the given Node subcommand in the given arguments in the given directory.
@@ -103,10 +109,12 @@ exec_flowr_docker <- function(docker_args, flowr_ver, flowr_args, verbose = FALS
 #' @param verbose Whether to print out information about the commands being executed.
 #' @param base_dir The base directory that Node was installed in. By default, this uses the package's installation directory through [get_default_node_base_dir()].
 #' @param background Whether the command should be executed as a background process.
+#' @param std_out The std_out parameter passed to the sys call. See [sys::exec_background()] and [sys::exec_wait()] for more info.
+#' @param std_err The std_err parameter passed to the sys call. See [sys::exec_background()] and [sys::exec_wait()] for more info.
 #' @return The return value of the call, which is the exit code if background is false, or the pid if background is true.
 #'
 #' @export
-exec_node_command <- function(app = c("node", "npm", "npx"), args, verbose = FALSE, base_dir = get_default_node_base_dir(), background = FALSE) {
+exec_node_command <- function(app = c("node", "npm", "npx"), args, verbose = FALSE, base_dir = get_default_node_base_dir(), background = FALSE, std_out = TRUE, std_err = TRUE) {
   # linux/mac have binaries in the bin subdirectory, windows has node.exe and npm/npx.cmd in the root, bleh
   path <- if (get_os() == "win") paste0(app, if (app == "node") ".exe" else ".cmd") else file.path("bin", app)
   cmd <- file.path(get_node_exe_dir(base_dir), path)
@@ -114,9 +122,9 @@ exec_node_command <- function(app = c("node", "npm", "npx"), args, verbose = FAL
     print(paste0("Executing ", cmd, " ", paste0(args, collapse = " ")))
   }
   if (background) {
-    return(sys::exec_background(cmd, args))
+    return(sys::exec_background(cmd, args, std_out, std_err))
   } else {
-    return(sys::exec_wait(cmd, args))
+    return(sys::exec_wait(cmd, args, std_out, std_err))
   }
 }
 
@@ -127,17 +135,19 @@ exec_node_command <- function(app = c("node", "npm", "npx"), args, verbose = FAL
 #' @param verbose Whether to print out information about the commands being executed.
 #' @param cmd The command to use for docker. Defaults to "docker".
 #' @param background Whether the command should be executed as a background process.
+#' @param std_out The std_out parameter passed to the sys call. See [sys::exec_background()] and [sys::exec_wait()] for more info.
+#' @param std_err The std_err parameter passed to the sys call. See [sys::exec_background()] and [sys::exec_wait()] for more info.
 #' @return The return value of the call, which is the exit code if background is false, or the pid if background is true.
 #'
 #' @export
-exec_docker_command <- function(args, verbose = FALSE, cmd = "docker", background = FALSE) {
+exec_docker_command <- function(args, verbose = FALSE, cmd = "docker", background = FALSE, std_out = TRUE, std_err = TRUE) {
   if (verbose) {
     print(paste0("Executing ", cmd, " ", paste0(args, collapse = " ")))
   }
   if (background) {
-    return(sys::exec_background(cmd, args))
+    return(sys::exec_background(cmd, args, std_out, std_err))
   } else {
-    return(sys::exec_wait(cmd, args))
+    return(sys::exec_wait(cmd, args, std_out, std_err))
   }
 }
 

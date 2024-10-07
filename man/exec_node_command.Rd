@@ -10,7 +10,9 @@ exec_node_command(
   args,
   verbose = FALSE,
   base_dir = get_default_node_base_dir(),
-  background = FALSE
+  background = FALSE,
+  std_out = TRUE,
+  std_err = TRUE
 )
 }
 \arguments{
@@ -23,6 +25,10 @@ exec_node_command(
 \item{base_dir}{The base directory that Node was installed in. By default, this uses the package's installation directory through \code{\link[=get_default_node_base_dir]{get_default_node_base_dir()}}.}
 
 \item{background}{Whether the command should be executed as a background process.}
+
+\item{std_out}{The std_out parameter passed to the sys call. See \code{\link[sys:exec]{sys::exec_background()}} and \code{\link[sys:exec]{sys::exec_wait()}} for more info.}
+
+\item{std_err}{The std_err parameter passed to the sys call. See \code{\link[sys:exec]{sys::exec_background()}} and \code{\link[sys:exec]{sys::exec_wait()}} for more info.}
 }
 \value{
 The return value of the call, which is the exit code if background is false, or the pid if background is true.

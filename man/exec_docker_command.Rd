@@ -5,7 +5,14 @@
 \title{Executes the given docker command in the given directory.
 This function expects docker to exist on the system.}
 \usage{
-exec_docker_command(args, verbose = FALSE, cmd = "docker", background = FALSE)
+exec_docker_command(
+  args,
+  verbose = FALSE,
+  cmd = "docker",
+  background = FALSE,
+  std_out = TRUE,
+  std_err = TRUE
+)
 }
 \arguments{
 \item{args}{The arguments to pass to the docker command, as a character vector.}
@@ -15,6 +22,10 @@ exec_docker_command(args, verbose = FALSE, cmd = "docker", background = FALSE)
 \item{cmd}{The command to use for docker. Defaults to "docker".}
 
 \item{background}{Whether the command should be executed as a background process.}
+
+\item{std_out}{The std_out parameter passed to the sys call. See \code{\link[sys:exec]{sys::exec_background()}} and \code{\link[sys:exec]{sys::exec_wait()}} for more info.}
+
+\item{std_err}{The std_err parameter passed to the sys call. See \code{\link[sys:exec]{sys::exec_background()}} and \code{\link[sys:exec]{sys::exec_wait()}} for more info.}
 }
 \value{
 The return value of the call, which is the exit code if background is false, or the pid if background is true.
