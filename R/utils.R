@@ -19,7 +19,7 @@ get_filetoken <- function(filepath = rlang::missing_arg(), content = rlang::miss
   if (!rlang::is_missing(filepath)) {
     stopifnot(is.character(filepath) || is.vector(filepath))
     # sort to ensure that a different order will result in the same token
-    filepath <- sort(c(filepath))
+    filepath <- sort(lapply(c(filepath), normalizePath) |> unlist())
     stopifnot(file.exists(filepath))
     token <- digest::digest(lapply(filepath, readLines))
   } else if (!rlang::is_missing(content)) {
