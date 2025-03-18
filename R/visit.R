@@ -26,7 +26,7 @@ visit_nodes <- function(nodes, callback) {
 #'
 #' @export
 visit_node <- function(node, callback) {
-  if (is.null(node)) {
+  if (is.null(node) || is.character(node) && node == "<>") {
     return()
   }
 
