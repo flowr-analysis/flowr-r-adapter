@@ -24,7 +24,6 @@ request_file_analysis <- function(con,
   if (!rlang::is_missing(filepath)) {
     stopifnot(is.character(filepath) || is.vector(filepath))
     filepath <- normalizePath(filepath, mustWork = FALSE)
-    filetoken <- get_filetoken(filepath)
     request <- list(
       type = "request-file-analysis",
       id = id,
