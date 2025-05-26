@@ -99,3 +99,20 @@ visit_node <- function(node, callback) {
     }
   )
 }
+
+#' Visits each node in the given AST and creates a map that maps node IDs to their locations in the code.
+#'
+#' @param ast The node or AST root to visit
+#'
+#' @return The ID-to-location map, where the keys are the node IDs and the values are the locations of the nodes.
+#'
+#' @export
+make_id_to_location_map <- function(ast) {
+  id_to_location_map <- list()
+  flowr::visit_node(ast, function(node) {
+    if (!is.null(node$location)) {
+      id_to_location_map[paste0(node$info$id)] <<- list(node$location)
+    }
+  })
+  return(id_to_location_map)
+}
