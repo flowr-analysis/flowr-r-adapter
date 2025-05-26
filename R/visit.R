@@ -102,7 +102,7 @@ visit_node <- function(node, callback) {
 
 #' Visits each node in the given AST and creates a map that maps node IDs to their locations in the code.
 #'
-#' @param node The node or AST root to visit
+#' @param ast The node or AST root to visit
 #'
 #' @return The ID-to-location map, where the keys are the node IDs and the values are the locations of the nodes.
 #'

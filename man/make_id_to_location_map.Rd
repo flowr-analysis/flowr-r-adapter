@@ -7,7 +7,7 @@
 make_id_to_location_map(ast)
 }
 \arguments{
-\item{node}{The node or AST root to visit}
+\item{ast}{The node or AST root to visit}
 }
 \value{
 The ID-to-location map, where the keys are the node IDs and the values are the locations of the nodes.
