@@ -12,3 +12,6 @@ rv/
 *.tar.gz.sig
 *.tar.gz.sha256
 flowr.Rcheck/
+# local rv activation (rv sync regenerates it); must not reach CI, where it would
+# point R at a missing rv library
+.Rprofile

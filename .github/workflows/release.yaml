@@ -44,7 +44,8 @@ jobs:
             patch) PA=$((PA+1));;
           esac
           echo "version=$MA.$MI.$PA" >> "$GITHUB_OUTPUT"
-          fv=$(grep -oE 'flowr_version[[:space:]]*=[[:space:]]*"[^"]*"' R/config.R | grep -oE '"[^"]*"' | tr -d '"')
+          # only the default assignment (anchored), never a roxygen example
+          fv=$(grep -m1 -E '^[[:space:]]*flowr_version[[:space:]]*=' R/config.R | grep -oE '"[^"]*"' | head -1 | tr -d '"')
           echo "flowr_version=$fv" >> "$GITHUB_OUTPUT"
 
       - if: steps.bump.outputs.part != 'none'
@@ -63,9 +64,14 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add DESCRIPTION NEWS.md
           git commit -m "Release ${NEW}"
-          git tag "v${NEW}"
-          git push origin HEAD:main --follow-tags
-          gh release create "v${NEW}" --title "v${NEW}" --generate-notes
+          git push origin HEAD:main
+          # create the release + tag at the bump commit (skip if it already exists)
+          sha=$(git rev-parse HEAD)
+          if gh release view "v${NEW}" >/dev/null 2>&1; then
+            echo "release v${NEW} already exists"
+          else
+            gh release create "v${NEW}" --title "v${NEW}" --target "$sha" --generate-notes
+          fi
 
   binaries:
     needs: release
