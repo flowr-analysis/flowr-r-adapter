@@ -235,7 +235,8 @@
   archive <- file.path(dir, basename(src$url))
   if (!quiet) message("Downloading flowR ", version, " (", plat$key, ") ...")
   .flowr_download_verify(src$url, src$sha256, archive)
-  got <- unname(tools::sha256sum(archive))            # the hash we verified
+  # the hash we verified; digest may be absent (Suggested), so record NA if so
+  got <- tryCatch(.flowr_sha256(archive), error = function(e) NA_character_)
   # Signature verification is mandatory in secure mode whenever a public key is
   # pinned, so it cannot be silently turned off with verify_signature = FALSE.
   pinned <- nzchar(system.file("flowr-pubkey.pem", package = "flowr"))
@@ -246,7 +247,9 @@
   # record how strongly this binary was verified, and the hash, for flowr_status()
   level <- if (isTRUE(sig)) "signature" else if (!is.null(src$sha256)) "checksum" else "none"
   writeLines(level, file.path(dir, "VERIFICATION"))
-  writeLines(got, file.path(dir, "SHA256"))
+  if (!is.na(got)) {
+    writeLines(got, file.path(dir, "SHA256"))
+  }
   if (grepl("\\.zip$", archive)) {
     utils::unzip(archive, exdir = dir)
   } else {

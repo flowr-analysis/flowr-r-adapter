@@ -20,7 +20,7 @@ stopifnot(system2("openssl", c("dgst", "-sha256", "-sign", "flowr-signing-key.pe
                                "-out", shQuote(sig), shQuote(archive))) == 0)
 
 writeLines(jsonlite::toJSON(auto_unbox = TRUE, pretty = TRUE, list(binaries = list(list(
-  version = version, platform = plat$key, sha256 = unname(tools::sha256sum(archive)),
+  version = version, platform = plat$key, sha256 = flowr:::.flowr_sha256(archive),
   url = paste0("file://", archive), sig = paste0("file://", sig))))),
   "inst/flowr-manifest.json")
 cat("signed", basename(archive), "\n")
