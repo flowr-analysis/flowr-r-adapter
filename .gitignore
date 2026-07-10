@@ -2,3 +2,13 @@
 .Rhistory
 .RData
 .Ruserdata
+flowr-signing-key.pem
+signed-build/
+inst/flowr-manifest.json.orig
+# rv installs the locked dependencies here; keep only rproject.toml + rv.lock
+rv/
+# build / signing artifacts
+*.tar.gz
+*.tar.gz.sig
+*.tar.gz.sha256
+flowr.Rcheck/

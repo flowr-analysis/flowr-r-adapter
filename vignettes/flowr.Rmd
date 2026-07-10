@@ -1,0 +1,166 @@
+---
+title: "Getting started with flowr"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with flowr}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+`flowr` brings [flowR](https://github.com/flowr-analysis/flowr) --- a static
+dataflow analyzer and program slicer for R --- to your R session. It lets you
+*slice* a script down to the statements that affect a given variable, extract a
+script's *dependencies*, run flowR *queries*, and drive the flowR *REPL*, all
+from R.
+
+## Installation
+
+```{r}
+# install.packages("remotes")
+remotes::install_github("flowr-analysis/flowr-r-adapter")
+```
+
+## The one-liner
+
+Install a flowR engine once, then the high-level helpers open a shared session
+the first time they are called, so the rest needs no setup:
+
+```{r}
+library(flowr)
+flowr_install()   # once: downloads a self-contained flowR binary
+
+code <- "x <- 1\ny <- 2\nz <- x + 5\nprint(z)"
+
+# Which statements does `z` on line 3 depend on?
+cat(slice(code, "3@z")$code)
+```
+
+A slicing *criterion* is written as `line@variable` (`"3@z"`), `line:column`
+(`"3:1"`) or `$id` for a flowR node id. Pass several at once with a vector.
+
+`slice()` returns a `flowr_slice`. Its **`$code`** element is the reconstructed,
+sliced R source as a single string - this is what you pass on, `cat()`, or write
+to a file (`writeLines(slice(code, "3@z")$code, "sliced.R")`). `$lines` are the
+kept original line numbers. **Printing** the slice instead shows a colored view:
+by default a git-style diff (removed lines red with `-`, kept lines as context),
+`print(s, style = "gray")` dims the unused lines, and `print(s, style = "code")`
+prints just `$code`. Slice a whole project with
+`slice(folder = "path/to/project", criterion = ...)`.
+
+## Diagnostics
+
+```{r}
+flowr_status()               # engine, configuration and active session
+options(flowr.debug = TRUE)  # log engine start-up and protocol messages (R side)
+flowr_set_config(verbose = TRUE)  # run the flowR server with --verbose
+flowr_log()                  # read the flowR server's own log output
+flowr_bug_report()           # open a prefilled GitHub issue (uses your browser)
+flowr_feedback()             # share feedback
+```
+
+## Overview: what a script does
+
+`flowr_overview()` is the convenience summary: the libraries loaded, files
+sourced, data read/written and plots produced, printed nicely. Every item carries
+a slicing `criterion`, so you can slice straight onto it - for example, see
+exactly the code behind the first plot:
+
+```{r}
+code <- "library(dplyr)\nd <- read.csv('in.csv')\nplot(d)"
+ov <- flowr_overview(code)
+ov                                              # a formatted overview
+cat(slice(code, ov$visualize[[1]]$criterion)$code)
+```
+
+The full query API is `query()` (`dataflow`, `dependencies`, `linter`, and more -
+see `vignette("flowr-engines")`).
+
+## Inspect a whole project
+
+Inside an R package or project you usually do not even pass code: the
+project-aware commands default to the current project. `flowr` walks up to the
+outermost project root (a `DESCRIPTION` or `.Rproj`, else a git root, else a
+folder with `.R` files) and reports what it picked.
+
+```{r}
+setwd("path/to/a/package")
+
+inspect_project()   # files and their roles (source, test, vignette, data, ...)
+flowr_overview()    # the package's libraries, plots, reads/writes - ready to slice
+```
+
+`inspect_project()`, `flowr_overview()`, `slice()`, `query()` and friends all
+accept `code`, `file` or `folder`; with none, they analyse the enclosing project.
+
+## Engines, in one paragraph
+
+`flowr` obtains flowR in several interchangeable ways --- the flowR JS+wasm
+**bundle** shipped in the package (needs Node.js, no download), a self-contained
+downloaded **binary** (no Node or Docker required), a system/private **Node.js**,
+or **Docker**. flowR itself is always the analysis backend; there is no
+approximate fallback. `auto` (the default) prefers a cached binary, then the
+bundle when Node is present, then downloads the binary. To pre-install an engine:
+
+```{r}
+flowr_install()                  # a self-contained binary into the cache
+flowr_install(engine = "docker") # or pull the flowR docker image
+flowr_installed("all")           # which engines are ready right now?
+```
+
+See `vignette("flowr-engines")` for choosing and configuring engines, the query
+API, the REPL, secure mode and performance.
+
+## A native flowR shell
+
+`flowr_repl()` relays single commands, but for an interactive session with
+flowR's own tab completion and history, hand over the terminal with
+`flowr_console()` (interactive `flowr_repl()` uses it automatically):
+
+```{r}
+flowr_repl(":dataflow x <- 1")   # one command, result back in R
+flowr_console()                   # full flowR shell; :quit to return
+flowr_console(r_access = TRUE)    # ... that can also execute R (uses r-shell)
+```
+
+In the console you can pass `watch://<path>` instead of `file://<path>` to a
+`:`-command to re-run it whenever the file changes. From R, `flowr_watch()` does
+the same for any command:
+
+```{r}
+flowr_watch("script.R")          # re-print the overview on every save
+flowr_watch("script.R", function(f) print(slice(file = f, criterion = "8@out")))
+```
+
+## Configuration and updates
+
+Read the effective settings with `flowr_config()` (grouped, with the server-only
+knobs marked), change them with `flowr_set_config()`, and check for a newer flowR
+with `flowr_update()`:
+
+```{r}
+flowr_config()                                  # the effective configuration
+flowr_set_config(engine = "binary", request_timeout = 300)
+flowr_set_config(flowr_version = "2.12.0", persist = TRUE)  # also across sessions
+flowr_update()                                  # is a newer flowR available?
+```
+
+Every knob is also a plain R option, so `options(flowr.engine = "binary")` and
+`cfg <- flowr_config(); cfg$engine <- "binary"` work too. Turn on
+`options(flowr.timing = TRUE)` to print each command's wall-clock time, and
+`options(flowr.debug = TRUE)` to log engine start-up and protocol messages.
+
+## Managing sessions
+
+You usually do not need to think about sessions --- a default one is created and
+reused. When you want an explicit one (e.g. a specific engine), use
+`flowr_connect()` and release it with `flowr_disconnect()`:
+
+```{r}
+s <- flowr_connect(engine = "binary")
+slice(code, "4@z")
+flowr_disconnect(s)
+```

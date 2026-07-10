@@ -1,0 +1,77 @@
+# A commit starting with [release:patch|minor|major] bumps DESCRIPTION, tags,
+# creates a GitHub release, and attaches the flowR binaries. Others are a no-op.
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      part: ${{ steps.bump.outputs.part }}
+      version: ${{ steps.ver.outputs.version }}
+      flowr_version: ${{ steps.ver.outputs.flowr_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: bump
+        shell: bash
+        run: |
+          msg=$(git log -1 --pretty=%s)
+          if   echo "$msg" | grep -qiE '^\[release:major\]'; then part=major
+          elif echo "$msg" | grep -qiE '^\[release:minor\]'; then part=minor
+          elif echo "$msg" | grep -qiE '^\[release:patch\]'; then part=patch
+          else part=none; fi
+          echo "part=$part" >> "$GITHUB_OUTPUT"
+
+      - id: ver
+        if: steps.bump.outputs.part != 'none'
+        shell: bash
+        run: |
+          cur=$(grep -E '^Version:' DESCRIPTION | sed -E 's/^Version:[[:space:]]*//')
+          IFS='.' read -r MA MI PA _ <<< "$cur"
+          MA=${MA:-0}; MI=${MI:-0}; PA=${PA:-0}
+          case "${{ steps.bump.outputs.part }}" in
+            major) MA=$((MA+1)); MI=0; PA=0;;
+            minor) MI=$((MI+1)); PA=0;;
+            patch) PA=$((PA+1));;
+          esac
+          echo "version=$MA.$MI.$PA" >> "$GITHUB_OUTPUT"
+          fv=$(grep -oE 'flowr_version[[:space:]]*=[[:space:]]*"[^"]*"' R/config.R | grep -oE '"[^"]*"' | tr -d '"')
+          echo "flowr_version=$fv" >> "$GITHUB_OUTPUT"
+
+      - if: steps.bump.outputs.part != 'none'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEW: ${{ steps.ver.outputs.version }}
+        shell: bash
+        run: |
+          sed -i -E "s/^Version:.*/Version: ${NEW}/" DESCRIPTION
+          if ! head -1 NEWS.md | grep -qF "# flowr ${NEW}"; then
+            note=$(git log -1 --pretty=%s | sed -E 's/^\[release:[a-z]+\][[:space:]]*//')
+            { printf '# flowr %s\n\n* %s\n\n' "$NEW" "$note"; cat NEWS.md; } > NEWS.md.tmp
+            mv NEWS.md.tmp NEWS.md
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add DESCRIPTION NEWS.md
+          git commit -m "Release ${NEW}"
+          git tag "v${NEW}"
+          git push origin HEAD:main --follow-tags
+          gh release create "v${NEW}" --title "v${NEW}" --generate-notes
+
+  binaries:
+    needs: release
+    if: needs.release.outputs.part != 'none'
+    uses: ./.github/workflows/binaries.yaml
+    with:
+      flowr_version: ${{ needs.release.outputs.flowr_version }}
+      release_tag: v${{ needs.release.outputs.version }}
+    secrets: inherit

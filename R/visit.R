@@ -5,7 +5,7 @@
 #'
 #' @return FALSE if the visitor was stopped by the callback.
 #'
-#' @export
+#' @noRd
 visit_nodes <- function(nodes, callback) {
   if (!is.null(nodes)) {
     for (node in nodes) {
@@ -24,7 +24,7 @@ visit_nodes <- function(nodes, callback) {
 #'
 #' @return FALSE if the visitor was stopped by the callback.
 #'
-#' @export
+#' @noRd
 visit_node <- function(node, callback) {
   if (is.null(node) || is.character(node) && node == "<>") {
     return()
@@ -39,6 +39,12 @@ visit_node <- function(node, callback) {
   # same logic as the builtin visitor (while explicitly specifying if an entry is a single node or a list)
   # https://github.com/Code-Inspect/flowr/blob/main/src/r-bridge/lang-4.x/ast/model/processing/visitor.ts#L22
   switch(node$type,
+    RProject = {
+      # flowR 2.11+ wraps each analysed file as files[[i]]$root
+      for (f in node$files) {
+        visit_node(f$root, callback)
+      }
+    },
     RFunctionCall = {
       if (node$named) {
         visit_node(node$functionName, callback)
@@ -106,10 +112,10 @@ visit_node <- function(node, callback) {
 #'
 #' @return The ID-to-location map, where the keys are the node IDs and the values are the locations of the nodes.
 #'
-#' @export
+#' @noRd
 make_id_to_location_map <- function(ast) {
   id_to_location_map <- list()
-  flowr::visit_node(ast, function(node) {
+  visit_node(ast, function(node) {
     if (!is.null(node$location)) {
       id_to_location_map[paste0(node$info$id)] <<- list(node$location)
     }

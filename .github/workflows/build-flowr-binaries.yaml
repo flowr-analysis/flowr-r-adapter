@@ -1,0 +1,57 @@
+# Manual: rebuild the shipped JS+wasm bundle (opening a PR) and publish native
+# binaries to a `flowr-v<version>` release, from just a flowR version.
+name: build-flowr-binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "flowR version to build"
+        required: true
+        default: "2.11.1"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bundle:
+    name: bundle + version bump
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - shell: bash
+        run: |
+          npm init -y
+          npm install --no-fund --no-audit "@eagleoutice/flowr@${{ inputs.version }}" ignore esbuild
+          mkdir -p inst/flowr-js
+          npx esbuild --bundle node_modules/@eagleoutice/flowr/cli/flowr.js \
+            --platform=node --minify --legal-comments=none --target=node18 \
+            --outfile=inst/flowr-js/flowr.min.js
+          cp node_modules/@davisvaughan/tree-sitter-r/tree-sitter-r.wasm inst/flowr-js/
+          cp node_modules/web-tree-sitter/tree-sitter.wasm inst/flowr-js/
+          printf 'VERSION %s\n' "${{ inputs.version }}" > inst/flowr-js/VERSION
+          sed -i -E 's/(flowr_version[[:space:]]*=[[:space:]]*)"[^"]*"/\1"${{ inputs.version }}"/' R/config.R
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          branch="flowr-update-${{ inputs.version }}"
+          git checkout -b "$branch"
+          git add inst/flowr-js R/config.R
+          git commit -m "Update flowR to ${{ inputs.version }}" || { echo "no changes"; exit 0; }
+          git push -u origin "$branch" --force
+          gh pr create --title "Update flowR to ${{ inputs.version }}" \
+            --body "Rebuilt inst/flowr-js and bumped the default flowR version." || true
+
+  binaries:
+    uses: ./.github/workflows/binaries.yaml
+    with:
+      flowr_version: ${{ inputs.version }}
+      release_tag: flowr-v${{ inputs.version }}
+    secrets: inherit

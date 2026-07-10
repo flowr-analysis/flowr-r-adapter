@@ -1,21 +1,36 @@
 Package: flowr
-Title: flowR R Adapter
-Version: 0.0.3
+Title: Static Dataflow Analysis and Program Slicing for R via flowR
+Version: 0.1.0
 Authors@R: c(
-    person("Florian", "Sihler", email = "florian.sihler@uni-ulm.de", role = "cre"),
+    person("Florian", "Sihler", email = "florian.sihler@uni-ulm.de", role = c("aut", "cre")),
     person("flowr-analysis", role = "cph"))
-Description: Interact with flowR directly from R.
-License: GPL-3 + file LICENSE
+Description: A robust R client for flowR, a static dataflow analyzer and program
+    slicer for the R language. Connects to a flowR server over a simple,
+    newline-delimited JSON protocol and can obtain that server through several
+    interchangeable engines: flowR's JavaScript and WebAssembly bundle shipped
+    with the package (run on 'Node.js'), a self-contained downloaded binary, a
+    system or private 'Node.js' install, or 'Docker'. Supports program slicing,
+    the query API and the read-eval-print loop of flowR 2.11.1.
+License: GPL-3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
+Depends:
+    R (>= 4.0.0)
 Imports:
-    digest,
-    jsonlite,
-    rlang,
-    sys
+    jsonlite (>= 1.8.0),
+    sys (>= 3.4),
+    tools,
+    utils
 Suggests:
-    testthat (>= 3.0.0)
+    digest (>= 0.6.0),
+    testthat (>= 3.0.0),
+    withr (>= 2.5.0),
+    knitr (>= 1.40),
+    rmarkdown (>= 2.20),
+    igraph,
+    openssl
 Config/testthat/edition: 3
-URL: https://github.com/flowr-analysis/flowR-R-adapter
-BugReports: https://github.com/flowr-analysis/flowR-R-adapter/issues
+VignetteBuilder: knitr
+URL: https://github.com/flowr-analysis/flowr-r-adapter
+BugReports: https://github.com/flowr-analysis/flowr-r-adapter/issues
+Config/roxygen2/version: 8.0.0

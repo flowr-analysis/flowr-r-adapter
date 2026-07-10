@@ -1,0 +1,104 @@
+# Reusable: compile self-contained flowR binaries (per platform), sign them, and
+# upload to `release_tag`. Called by release.yaml and build-flowr-binaries.yaml.
+# flowR itself is not modified: we compile the published npm CLI with `bun build
+# --compile`, which inlines every module; the two tree-sitter .wasm files ship
+# alongside and are loaded from disk.
+name: binaries
+
+on:
+  workflow_call:
+    inputs:
+      flowr_version:
+        required: true
+        type: string
+      release_tag:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,     target: linux-x64 }
+          - { os: ubuntu-24.04-arm,  target: linux-arm64 }
+          - { os: macos-13,          target: darwin-x64 }
+          - { os: macos-latest,      target: darwin-arm64 }
+          - { os: windows-latest,    target: win-x64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install flowR (the published npm package)
+        shell: bash
+        run: |
+          npm init -y
+          npm install --no-fund --no-audit "@eagleoutice/flowr@${{ inputs.flowr_version }}"
+
+      - name: Compile a single self-contained executable
+        shell: bash
+        run: |
+          ext=""
+          [ "${{ matrix.target }}" = "win-x64" ] && ext=".exe"
+          # --bytecode precompiles for faster startup + a smaller binary; it can
+          # error on ESM-only entrypoints in some Bun versions, so fall back.
+          bun build ./node_modules/@eagleoutice/flowr/cli/flowr.js \
+            --compile --minify --sourcemap=none --bytecode --outfile "flowr${ext}" \
+          || bun build ./node_modules/@eagleoutice/flowr/cli/flowr.js \
+            --compile --minify --sourcemap=none --outfile "flowr${ext}"
+
+      - name: Shrink the executable (UPX)
+        if: matrix.os != 'macos-13' && matrix.os != 'macos-latest'
+        shell: bash
+        run: |
+          ext=""
+          [ "${{ matrix.target }}" = "win-x64" ] && ext=".exe"
+          if command -v upx >/dev/null 2>&1; then :; \
+          elif command -v choco >/dev/null 2>&1; then choco install upx -y || true; \
+          else sudo apt-get update && sudo apt-get install -y upx-ucl || true; fi
+          upx --best --lzma "flowr${ext}" || echo "UPX skipped (not compressible)"
+
+      - name: Package binary + tree-sitter wasm
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp flowr* dist/ 2>/dev/null || true
+          find node_modules -name 'tree-sitter-r.wasm' -exec cp {} dist/ \;
+          find node_modules -name 'tree-sitter.wasm'   -exec cp {} dist/ \;
+          tar -czf "flowr-${{ inputs.flowr_version }}-${{ matrix.target }}.tar.gz" -C dist .
+
+      - name: Checksum + signature
+        shell: bash
+        env:
+          FLOWR_SIGNING_KEY: ${{ secrets.FLOWR_SIGNING_KEY }}
+        run: |
+          f="flowr-${{ inputs.flowr_version }}-${{ matrix.target }}.tar.gz"
+          if command -v sha256sum >/dev/null; then sha256sum "$f" > "$f.sha256";
+          else shasum -a 256 "$f" > "$f.sha256"; fi
+          # openssl ECDSA/SHA-256 so the R `openssl` package verifies it, no gpg.
+          if [ -n "$FLOWR_SIGNING_KEY" ]; then
+            printf '%s' "$FLOWR_SIGNING_KEY" > signing_key.pem
+            openssl dgst -sha256 -sign signing_key.pem -out "$f.sig" "$f"
+            rm -f signing_key.pem
+          else
+            echo "No FLOWR_SIGNING_KEY secret; SHA-256 only."
+          fi
+
+      - name: Upload to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          fail_on_unmatched_files: false
+          files: |
+            flowr-${{ inputs.flowr_version }}-${{ matrix.target }}.tar.gz
+            flowr-${{ inputs.flowr_version }}-${{ matrix.target }}.tar.gz.sha256
+            flowr-${{ inputs.flowr_version }}-${{ matrix.target }}.tar.gz.sig

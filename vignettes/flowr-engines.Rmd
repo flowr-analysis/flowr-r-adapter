@@ -1,0 +1,151 @@
+---
+title: "Engines, queries, the REPL and secure mode"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Engines, queries, the REPL and secure mode}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+library(flowr)
+```
+
+This vignette covers how `flowr` obtains flowR, how to pick and configure an
+engine, and how to use the query API and the REPL.
+
+## Engines
+
+An *engine* is how a running flowR server is obtained. All engines are
+interchangeable; the client speaks the same protocol to each. flowR is always
+the analysis backend; there is no approximate fallback.
+
+| Engine    | Needs                       | Notes |
+|-----------|-----------------------------|-------|
+| `bundled` | Node.js                     | flowR JS+wasm shipped in the package; no download. |
+| `binary`  | nothing (downloaded once)   | Self-contained executable; no Node needed. |
+| `node`    | Node.js (system or private) | npm-installs the flowR package. |
+| `docker`  | Docker                      | Runs `eagleoutice/flowr`. |
+| `auto`    | --                          | Cached binary, else the shipped bundle (Node), else the binary. |
+
+Select an engine per call, or globally:
+
+```{r}
+library(flowr)
+
+flowr_connect(engine = "binary")            # per session
+options(flowr.engine = "node")              # globally
+Sys.setenv(FLOWR_ENGINE = "docker")         # via environment
+```
+
+`auto` (the default) uses an already-installed engine, otherwise it offers to
+install the self-contained binary. Install an engine explicitly:
+
+```{r}
+flowr_install()                    # binary engine, flowR 2.11.1
+flowr_install(engine = "node")     # Node engine
+flowr_installed()                  # TRUE / FALSE
+flowr_uninstall()                  # clear the cache
+```
+
+Downloads are cached under `tools::R_user_dir("flowr", "cache")` and, for the
+binary engine, verified against a SHA-256 manifest before ever being executed.
+
+### The flowR parser engine
+
+Independently of the above, flowR itself can parse R with **tree-sitter** (the
+default; needs no R) or the **r-shell** engine, which reuses the R you are
+already running:
+
+```{r}
+flowr_connect(flowr_engine = "tree-sitter")   # default
+flowr_set_config(secure = FALSE)               # r-shell needs secure mode off
+flowr_connect(flowr_engine = "r-shell")        # flowR parses via your R
+```
+
+Because you are inside R, enabling R *execution* in flowR's REPL is a one-liner:
+`flowr_console(r_access = TRUE)` starts the flowR shell with the r-shell engine
+and `--r-session-access`, so `:`-commands and plain R both work.
+
+## Secure mode (on by default)
+
+`flowr` runs in a hardened mode unless you opt out. Secure mode:
+
+* forces the tree-sitter parser, so untrusted code is never handed to an R
+  interpreter;
+* always checksum-verifies binary downloads;
+* never invokes a shell (processes are started from an argument vector, so there
+  is no shell-escape surface).
+
+```{r, eval = TRUE}
+flowr_config()$secure              # TRUE by default
+```
+
+```{r}
+flowr_set_config(secure = FALSE)   # opt out (e.g. to use the r-shell engine)
+```
+
+## The query API
+
+`query()` exposes flowR's full query API. Pass a query type name, a query object
+(a list with a `type`), or a list of them:
+
+```{r}
+code <- "x <- 1\ny <- x + 1\nprint(y)"
+
+query(code, "dependencies")
+query(code, "dataflow")
+query(code, c("normalized-ast", "id-map"))
+
+# object form for queries that take arguments
+query(code, list(type = "static-slice", criteria = "2@y", direction = "backward"))
+```
+
+Supported query types in flowR 2.11.1 include `dependencies`, `dataflow`,
+`call-context`, `df-shape`, `static-slice`, `id-map`, `normalized-ast`,
+`linter`, `location-map`, `call-graph` and more. Because `query()` forwards
+whatever you pass, new query types work without updating this package.
+
+## The REPL
+
+```{r}
+flowr_repl(":help")                # a REPL command; returns the streamed output
+flowr_repl("1 + 1")                # or an R expression
+```
+
+## Status and debugging
+
+`flowr_status()` shows which engine you are using, the effective configuration,
+the config file in effect and the active session. Set `options(flowr.debug =
+TRUE)` to log engine start-up and every protocol message.
+
+```{r, eval = TRUE}
+flowr_status()
+```
+
+```{r}
+options(flowr.debug = TRUE)        # log engine + protocol activity
+slice("x <- 1\ny <- x", "2@y")
+options(flowr.debug = FALSE)
+```
+
+Settings can also come from a `flowr.json` file (keys are option names, e.g.
+`{"engine": "binary", "secure": true}`), resolved from
+`options(flowr.config_file=)`, then `$FLOWR_CONFIG`, then `flowr.json` in the
+working directory, then a per-user config file. `flowr_status()` shows which
+file is active.
+
+## Performance
+
+A session keeps one warm flowR server and reuses it across calls, and analyses
+are cached per content (bounded by `options(flowr.cache_size = )`), so repeated
+`slice()`/`query()` on the same code avoid both re-spawning and re-analysis:
+
+```{r}
+s <- flowr_connect()
+slice(code, "2@y")    # analyses once
+query(code, "dataflow")  # reuses the cached analysis
+flowr_clear_cache()               # if you need to drop it
+flowr_disconnect(s)
+```

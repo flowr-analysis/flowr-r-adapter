@@ -33,5 +33,7 @@ jobs:
         with:
           extra-packages: devtools
       - name: Run devtools::check()
-        # error on any type of notice from the check
-        run: Rscript -e 'devtools::check(error_on = "note")'
+        # Fail on warnings/errors. NOTEs are allowed because the package ships
+        # flowR's ~2.5 MB JS+wasm bundle in inst/flowr-js (a "sub-directories of
+        # 1Mb or more" NOTE) and a "New submission" NOTE is expected.
+        run: Rscript -e 'devtools::check(error_on = "warning")'
