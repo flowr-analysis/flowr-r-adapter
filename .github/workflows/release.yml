@@ -79,6 +79,22 @@ jobs:
           echo "flowR version to build binaries for: $fv"
           echo "flowr_version=$fv" >> "$GITHUB_OUTPUT"
 
+      # The release is named after the adapter version (v<adapter>, created by
+      # use_github_release from NEWS.md). Record the bundled flowR version in its
+      # notes so the flowR version is discoverable without decoding the tag.
+      - name: Note the bundled flowR version in the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          FV: ${{ steps.fv.outputs.flowr_version }}
+        run: |
+          set -euo pipefail
+          new_version=$(sed -n -E "s/Version: (.*)/\1/p" DESCRIPTION)
+          tag="v$new_version"
+          body=$(gh release view "$tag" --json body --jq .body || true)
+          note="Bundles **flowR ${FV}** (the analysis engine). Prebuilt engine binaries for this flowR version are attached to the [\`flowr-v${FV}\`](https://github.com/${GITHUB_REPOSITORY}/releases/tag/flowr-v${FV}) asset release, downloaded on demand by the R client."
+          printf '%s\n\n%s\n' "$note" "$body" | gh release edit "$tag" --notes-file - --latest
+
   # build + publish the native binaries to the flowr-v<flowR-version> release,
   # which is where the R client downloads them from
   binaries:
