@@ -27,6 +27,9 @@
   verify_signature = TRUE,          # verify a binary's signature (openssl, no
                                     # gpg needed) when a pinned key is shipped
   progress        = TRUE,           # transient "starting engine" hint (cleared)
+  message_limit   = 3L,             # show each transient hint (startup banner,
+                                    # "no binary installed", ...) at most this
+                                    # many times per R session; 0 mutes them
   timing          = FALSE,          # print each command's wall-clock time
   verbose         = FALSE,          # run the flowR server/REPL with --verbose
   quiet           = FALSE
@@ -144,7 +147,8 @@ flowr_config_file <- function() {
   general = c("engine", "flowr_version", "flowr_engine", "secure", "verify_signature"),
   server  = c("host", "port", "ws", "connect_timeout", "request_timeout",
               "docker_image", "binary_repo"),
-  runtime = c("cache_size", "progress", "timing", "verbose", "quiet", "debug")
+  runtime = c("cache_size", "progress", "message_limit", "timing", "verbose",
+              "quiet", "debug")
 )
 
 #' Inspect the effective flowr configuration

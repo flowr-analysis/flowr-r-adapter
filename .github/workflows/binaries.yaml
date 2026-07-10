@@ -32,6 +32,13 @@ jobs:
           - { os: macos-latest,      target: darwin-arm64 }
           - { os: windows-latest,    target: win-x64 }
     steps:
+      - name: Validate inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "${{ inputs.flowr_version }}" ] || { echo "::error::flowr_version input is empty"; exit 1; }
+          [ -n "${{ inputs.release_tag }}"  ] || { echo "::error::release_tag input is empty";  exit 1; }
+          echo "building flowR ${{ inputs.flowr_version }} -> release ${{ inputs.release_tag }} (${{ matrix.target }})"
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:

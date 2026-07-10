@@ -300,6 +300,20 @@
   NA_character_
 }
 
+# The "no standalone binary" notice, phrased by whether the bundled engine can
+# actually run: the bundle needs Node.js >= 18, so if a usable Node is present we
+# nudge toward a binary; if it is missing we tell the user that installing a
+# binary is how to get a working flowR backend at all. Returns the coloured line.
+.flowr_no_binary_msg <- function() {
+  have_node <- !is.na(tryCatch(.flowr_node_exe(), error = function(e) NA_character_))
+  msg <- if (have_node) {
+    "flowr: using bundled engine with Node.js; run flowr_install() for a binary."
+  } else {
+    "flowr: no Node.js found; run flowr_install() to get the flowR backend."
+  }
+  .flowr_ansi(msg, "90", .flowr_use_color())
+}
+
 .flowr_node_ok <- function(node) {
   v <- tryCatch(sys::exec_internal(node, "--version"), error = function(e) NULL)
   if (is.null(v) || v$status != 0) {
@@ -649,6 +663,14 @@
   engine <- .flowr_resolve_engine(engine, flowr_version)
   timeout <- flowr_option("connect_timeout")
   .flowr_log("engine resolved: '", requested, "' -> '", engine, "' (flowR ", flowr_version, ")")
+
+  # `auto` silently fell back to the bundled engine because no binary is present;
+  # tell the user how to get a standalone binary and why (bundled needs Node).
+  if (identical(requested, "auto") && identical(engine, "bundled") &&
+      !isTRUE(tryCatch(.flowr_binary_installed(flowr_version),
+                       error = function(e) FALSE))) {
+    .flowr_notify("no-binary", .flowr_no_binary_msg())
+  }
 
   # Secure-mode invariants (default on). We never build a shell string anywhere
   # (sys::exec_* takes an argv vector), so there is no shell-escape surface.

@@ -13,7 +13,7 @@ help:
 	@echo "  test      run the test suite (real-engine tests run when installed)"
 	@echo "  check     R CMD check --as-cran on a fresh build"
 	@echo "  install   document, then (re)install the package locally"
-	@echo "  reinstall install the package locally without regenerating docs"
+	@echo "  reinstall build a tarball and install it (with vignettes; no doc regen)"
 	@echo "  reinstall_signed  sign the cached binary and reinstall to verify it"
 	@echo "  clean     remove build artefacts"
 
@@ -30,12 +30,16 @@ check: document
 	R --no-init-file CMD build .
 	R --no-init-file CMD check --as-cran --no-manual $$(ls -t flowr_*.tar.gz | head -1)
 
-# install.packages(type = "source") is used instead of `R CMD INSTALL` so a
-# single command works everywhere (no shell activation, no sandbox surprises).
 install: document reinstall
 
+# Build a source tarball first, then install THAT, so a local (re)install matches
+# a real deploy: `R CMD build` renders the vignettes and stages help/data the way
+# CRAN/GitHub installs do, so vignette("flowr") and ?flowr are present afterwards.
+# Installing a source *directory* directly (install.packages(".") / R CMD INSTALL .)
+# skips vignette building, which is why they were missing before.
 reinstall:
-	$(R) -e 'install.packages(".", repos = NULL, type = "source")'
+	R --no-init-file CMD build .
+	$(R) -e 'tb <- Sys.glob("flowr_*.tar.gz"); tb <- tb[order(file.mtime(tb), decreasing = TRUE)][1]; install.packages(tb, repos = NULL, type = "source")'
 
 # Sign the locally cached binary with flowr-signing-key.pem, ship the matching
 # public key, reinstall, and confirm flowr_status() reports signature-verified.

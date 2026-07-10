@@ -57,6 +57,13 @@ flowr_install <- function(version = flowr_option("flowr_version"),
 #' Reports engine readiness from the engine registry, so it stays correct as
 #' engines are added. Use `"all"` to see every engine at once.
 #'
+#' Note that `flowr_installed("any")` (the default) is `TRUE` whenever *any*
+#' engine is ready, including the `bundled` flowR that ships inside the package
+#' (which only needs Node.js on your PATH). So it can report `TRUE` even when no
+#' self-contained binary has been downloaded; in that bundled-only case it also
+#' emits a one-line note pointing at [flowr_install()]. Ask specifically with
+#' `flowr_installed("binary")` if you mean the downloaded binary.
+#'
 #' @param engine One engine (`"binary"`, `"bundled"`, `"node"`, `"docker"`),
 #'   `"any"` (is at least one ready?), or `"all"` (a named logical for every
 #'   engine).
@@ -76,7 +83,18 @@ flowr_installed <- function(engine = c("any", "all", "binary", "bundled", "node"
     return(vapply(stats::setNames(names(specs), names(specs)), ready, logical(1)))
   }
   if (engine == "any") {
-    return(any(vapply(names(specs), ready, logical(1))))
+    vals <- vapply(stats::setNames(names(specs), names(specs)), ready, logical(1))
+    # Note when the only thing making this TRUE is the shipped bundle (which
+    # needs Node.js): the answer is "yes", but there is no self-contained binary.
+    others <- setdiff(names(vals), "bundled")
+    if (isTRUE(vals[["bundled"]]) && !any(vals[others])) {
+      .flowr_notify(
+        "installed-bundled-only",
+        "flowr_installed(): ready via the bundled engine only (needs Node.js). ",
+        "No downloaded binary is installed; run flowr_install() for one."
+      )
+    }
+    return(any(vals))
   }
   ready(engine)
 }

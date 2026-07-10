@@ -74,14 +74,22 @@
   }
   cat(.flowr_ansi(msg, "90", .flowr_use_color()))
   utils::flush.console()
+  # Remember that an unterminated transient line is on screen, so any message
+  # emitted before we clear it (e.g. the "no binary" notice while the engine
+  # starts) can end the line first instead of being glued onto it.
+  .flowr_state$progress_active <- TRUE
   TRUE
 }
 
-# Erase the transient line (carriage return + clear to end of line).
-.flowr_progress_clear <- function(shown) {
-  if (isTRUE(shown)) {
+# Erase the transient line (carriage return + clear to end of line). Idempotent
+# via `.flowr_state$progress_active`: it clears at most once, so it is safe to
+# call both from `.flowr_notify()` (to free the line for a message) and from the
+# `flowr_connect()` on.exit, without double-emitting or clobbering later output.
+.flowr_progress_clear <- function(shown = TRUE) {
+  if (isTRUE(shown) && isTRUE(.flowr_state$progress_active)) {
     cat("\r\x1b[K")
     utils::flush.console()
+    .flowr_state$progress_active <- NULL
   }
   invisible(NULL)
 }

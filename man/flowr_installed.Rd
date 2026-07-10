@@ -24,6 +24,14 @@ a named logical vector, one entry per registered engine.
 Reports engine readiness from the engine registry, so it stays correct as
 engines are added. Use \code{"all"} to see every engine at once.
 }
+\details{
+Note that \code{flowr_installed("any")} (the default) is \code{TRUE} whenever \emph{any}
+engine is ready, including the \code{bundled} flowR that ships inside the package
+(which only needs Node.js on your PATH). So it can report \code{TRUE} even when no
+self-contained binary has been downloaded; in that bundled-only case it also
+emits a one-line note pointing at \code{\link[=flowr_install]{flowr_install()}}. Ask specifically with
+\code{flowr_installed("binary")} if you mean the downloaded binary.
+}
 \examples{
 flowr_installed("binary")
 flowr_installed("all")
