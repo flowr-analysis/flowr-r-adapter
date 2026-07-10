@@ -3,8 +3,10 @@
 
 mk_slice <- function() {
   testthat::skip_on_cran()
-  if (!flowr_installed("binary") && !flowr_installed("node")) {
-    testthat::skip("no real flowR engine installed")
+  # The bundled engine counts: it runs flowR whenever Node.js >= 18 is present.
+  if (!flowr_installed("binary") && !flowr_installed("node") &&
+      !flowr_installed("bundled")) {
+    testthat::skip("no flowR engine available (need a binary/node install, or Node.js for the bundle)")
   }
   flowr_connect()
   withr::defer(flowr_disconnect(), envir = parent.frame())

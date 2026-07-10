@@ -2,8 +2,11 @@
 
 skip_no_engine <- function() {
   testthat::skip_on_cran()
-  if (!flowr_installed("binary") && !flowr_installed("node")) {
-    testthat::skip("no real flowR engine installed")
+  # The bundled engine is real too (runs flowR when Node.js >= 18 is present);
+  # only skip when nothing can actually run.
+  if (!flowr_installed("binary") && !flowr_installed("node") &&
+      !flowr_installed("bundled")) {
+    testthat::skip("no flowR engine available (need a binary/node install, or Node.js for the bundle)")
   }
 }
 
@@ -33,7 +36,11 @@ test_that("multi-file folder slice returns a slice object", {
              file.path(d, "main.R"))
   s <- flowr_connect()
   on.exit(flowr_disconnect(s), add = TRUE)
-  expect_s3_class(slice(folder = d, criterion = "3@b"), "flowr_slice")
+  # Folder mode numbers all files together: helper.R is line 1, so `b` is line 4.
+  sl <- slice(folder = d, criterion = "4@b")
+  expect_s3_class(sl, "flowr_slice")
+  # slice must reach b's definition (line 4) and the helper it needs (line 1)
+  expect_true(all(c(1, 4) %in% sl$lines))
 })
 
 test_that("dataflow graph converts to vertices/edges and igraph", {

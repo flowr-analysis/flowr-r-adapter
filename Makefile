@@ -4,7 +4,10 @@
 
 R := Rscript --no-init-file
 
-.PHONY: help sync document test check install reinstall reinstall_signed clean
+.PHONY: help sync document test check hooks install reinstall reinstall_signed clean
+
+# Run R with the rv-locked library on the search path (see tools/with-rvlib.sh).
+WITH_RVLIB := tools/with-rvlib.sh
 
 help:
 	@echo "targets:"
@@ -12,6 +15,7 @@ help:
 	@echo "  document  regenerate NAMESPACE and man/ from roxygen"
 	@echo "  test      run the test suite (real-engine tests run when installed)"
 	@echo "  check     R CMD check --as-cran on a fresh build"
+	@echo "  hooks     install the local git pre-commit/pre-push guards"
 	@echo "  install   document, then (re)install the package locally"
 	@echo "  reinstall build a tarball and install it (with vignettes; no doc regen)"
 	@echo "  reinstall_signed  sign the cached binary and reinstall to verify it"
@@ -21,14 +25,19 @@ sync:
 	rv sync
 
 document:
-	$(R) -e 'roxygen2::roxygenise()'
+	$(WITH_RVLIB) $(R) -e 'roxygen2::roxygenise()'
 
 test:
-	NOT_CRAN=true $(R) -e 'testthat::test_local()'
+	NOT_CRAN=true $(WITH_RVLIB) $(R) -e 'testthat::test_local(stop_on_failure = TRUE)'
 
 check: document
-	R --no-init-file CMD build .
-	R --no-init-file CMD check --as-cran --no-manual $$(ls -t flowr_*.tar.gz | head -1)
+	$(WITH_RVLIB) R --no-init-file CMD build .
+	$(WITH_RVLIB) R --no-init-file CMD check --as-cran --no-manual $$(ls -t flowr_*.tar.gz | head -1)
+
+# Point git at the tracked hook scripts. Run once per clone; re-running is safe.
+hooks:
+	git config core.hooksPath .githooks
+	@echo "installed git hooks: pre-commit (tests), pre-push (R CMD check)."
 
 install: document reinstall
 

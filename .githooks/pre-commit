@@ -1,0 +1,25 @@
+#!/usr/bin/env sh
+# Pre-commit guard: run the full testthat suite so a broken test can never land
+# in a commit again (e.g. the `pkg:::env$x <- v` complex-assignment error that
+# only surfaces under an installed-package namespace).
+#
+# The real-engine tests run here too: NOT_CRAN=true makes skip_on_cran() a no-op,
+# and the shipped bundled engine runs flowR whenever Node.js >= 18 is present.
+#
+# Bypass in a genuine emergency with `git commit --no-verify`, or SKIP_R_HOOKS=1.
+set -eu
+
+if [ "${SKIP_R_HOOKS:-0}" = "1" ]; then
+  echo "[pre-commit] SKIP_R_HOOKS=1 set; skipping the R test suite." >&2
+  exit 0
+fi
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+echo "[pre-commit] running testthat suite (NOT_CRAN=true) ..."
+NOT_CRAN=true tools/with-rvlib.sh \
+  Rscript --no-init-file \
+    -e 'testthat::test_local(stop_on_failure = TRUE, reporter = "progress")'
+
+echo "[pre-commit] tests passed."

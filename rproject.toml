@@ -21,5 +21,10 @@ dependencies = [
     "testthat",
     "knitr",
     "rmarkdown",
+    "roxygen2",
     "withr",
+    # Suggested packages exercised by the test suite; installed locally so their
+    # tests run instead of being skipped with skip_if_not_installed().
+    "igraph",
+    "openssl",
 ]

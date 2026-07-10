@@ -81,11 +81,13 @@ mock_server_start <- function() {
                               std_out = tempfile(), std_err = tempfile())
   ready <- FALSE
   for (i in seq_len(80)) {
-    con <- tryCatch(
+    # Poll until the server is up; suppress the expected "port cannot be opened"
+    # warning each probe emits before it starts (a real failure hits skip() below).
+    con <- suppressWarnings(tryCatch(
       socketConnection("127.0.0.1", port, server = FALSE, blocking = FALSE,
                        open = "r+b", timeout = 1),
       error = function(e) NULL
-    )
+    ))
     if (!is.null(con)) { close(con); ready <- TRUE; break }
     Sys.sleep(0.1)
   }

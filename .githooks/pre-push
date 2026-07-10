@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+# Pre-push guard: run the full `R CMD check --as-cran` (via `make check`) before
+# anything leaves this machine -- exactly the check that failed with 5 test
+# errors. This regenerates the docs, builds a tarball, and runs the checks so a
+# push can never carry a check-breaking change.
+#
+# Slower than the pre-commit test run; bypass with `git push --no-verify` or
+# SKIP_R_HOOKS=1 when you knowingly need to.
+set -eu
+
+if [ "${SKIP_R_HOOKS:-0}" = "1" ]; then
+  echo "[pre-push] SKIP_R_HOOKS=1 set; skipping R CMD check." >&2
+  exit 0
+fi
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+echo "[pre-push] running 'make check' (R CMD check --as-cran) ..."
+make check
+
+echo "[pre-push] check passed."

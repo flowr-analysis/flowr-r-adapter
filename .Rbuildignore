@@ -1,4 +1,6 @@
 ^\.github$
+^\.githooks$
+^\.claude$
 ^cran-comments\.md$
 ^rproject\.toml$
 ^rv\.lock$

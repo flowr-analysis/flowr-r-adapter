@@ -5,10 +5,17 @@
 # starting (e.g. the "no downloaded binary" notice). A notice has to end the
 # open progress line first, so each lands on its own clean line.
 
+# The package's live notification state (an environment; reference semantics, so
+# writing through this local handle mutates the real state). Bound via a local
+# because `flowr:::.flowr_state$x <- v` is a complex assignment R cannot route
+# through `:::` ("object 'flowr' not found").
+notify_state <- function() flowr:::.flowr_state
+
 # Fresh, isolated notification state for a test.
 reset_notify <- function() {
-  flowr:::.flowr_state$msg_counts <- NULL
-  flowr:::.flowr_state$progress_active <- NULL
+  st <- notify_state()
+  st$msg_counts <- NULL
+  st$progress_active <- NULL
 }
 
 test_that("a notice ends an open progress line before printing (no glued output)", {
@@ -16,7 +23,8 @@ test_that("a notice ends an open progress line before printing (no glued output)
                             flowr.color = FALSE))
   reset_notify()
   # simulate an on-screen, unterminated progress line
-  flowr:::.flowr_state$progress_active <- TRUE
+  st <- notify_state()
+  st$progress_active <- TRUE
 
   out <- capture.output(
     expect_message(flowr:::.flowr_notify("no-binary", "using the bundled engine"),
@@ -25,11 +33,12 @@ test_that("a notice ends an open progress line before printing (no glued output)
   # the transient line was erased (carriage return + clear-to-end-of-line) ...
   expect_true(grepl("\r\033\\[K", paste0(out, collapse = "")))
   # ... and marked closed, so the later on.exit clear becomes a no-op
-  expect_null(flowr:::.flowr_state$progress_active)
+  expect_null(notify_state()$progress_active)
 })
 
 test_that("clearing a progress line is idempotent", {
-  flowr:::.flowr_state$progress_active <- TRUE
+  st <- notify_state()
+  st$progress_active <- TRUE
   first <- capture.output(flowr:::.flowr_progress_clear(TRUE), type = "output")
   expect_true(grepl("\033\\[K", paste0(first, collapse = "")))
   # a second clear must not emit anything (the line is already gone)

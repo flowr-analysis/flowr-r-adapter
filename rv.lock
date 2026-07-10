@@ -4,6 +4,15 @@ version = 2
 r_version = "4.6"
 
 [[packages]]
+name = "Matrix"
+version = "1.7-5"
+source = { builtin = true }
+force_source = false
+dependencies = [
+    "lattice",
+]
+
+[[packages]]
 name = "R6"
 version = "2.6.1"
 source = { repository = "https://cran.r-project.org/" }
@@ -11,8 +20,24 @@ force_source = false
 dependencies = []
 
 [[packages]]
+name = "askpass"
+version = "1.2.1"
+source = { repository = "https://cran.r-project.org/" }
+force_source = false
+dependencies = [
+    { name = "sys", requirement = "(>= 2.1)" },
+]
+
+[[packages]]
 name = "base64enc"
 version = "0.1-6"
+source = { repository = "https://cran.r-project.org/" }
+force_source = false
+dependencies = []
+
+[[packages]]
+name = "brew"
+version = "1.0-10"
 source = { repository = "https://cran.r-project.org/" }
 force_source = false
 dependencies = []
@@ -67,6 +92,20 @@ dependencies = [
 [[packages]]
 name = "cli"
 version = "3.6.6"
+source = { repository = "https://cran.r-project.org/" }
+force_source = false
+dependencies = []
+
+[[packages]]
+name = "commonmark"
+version = "2.0.0"
+source = { repository = "https://cran.r-project.org/" }
+force_source = false
+dependencies = []
+
+[[packages]]
+name = "cpp11"
+version = "0.5.5"
 source = { repository = "https://cran.r-project.org/" }
 force_source = false
 dependencies = []
@@ -164,6 +203,22 @@ dependencies = [
 ]
 
 [[packages]]
+name = "igraph"
+version = "2.3.3"
+source = { repository = "https://cran.r-project.org/" }
+force_source = false
+dependencies = [
+    "cli",
+    "lifecycle",
+    "magrittr",
+    "Matrix",
+    { name = "pkgconfig", requirement = "(>= 2.0.0)" },
+    { name = "rlang", requirement = "(>= 1.1.0)" },
+    "vctrs",
+    { name = "cpp11", requirement = "(>= 0.5.0)" },
+]
+
+[[packages]]
 name = "jquerylib"
 version = "0.1.4"
 source = { repository = "https://cran.r-project.org/" }
@@ -190,6 +245,13 @@ dependencies = [
     { name = "xfun", requirement = "(>= 0.52)" },
     { name = "yaml", requirement = "(>= 2.1.19)" },
 ]
+
+[[packages]]
+name = "lattice"
+version = "0.22-9"
+source = { builtin = true }
+force_source = false
+dependencies = []
 
 [[packages]]
 name = "lifecycle"
@@ -226,6 +288,15 @@ force_source = false
 dependencies = []
 
 [[packages]]
+name = "openssl"
+version = "2.4.2"
+source = { repository = "https://cran.r-project.org/" }
+force_source = false
+dependencies = [
+    "askpass",
+]
+
+[[packages]]
 name = "otel"
 version = "0.2.0"
 source = { repository = "https://cran.r-project.org/" }
@@ -244,6 +315,13 @@ dependencies = [
     "processx",
     "R6",
 ]
+
+[[packages]]
+name = "pkgconfig"
+version = "2.0.3"
+source = { repository = "https://cran.r-project.org/" }
+force_source = false
+dependencies = []
 
 [[packages]]
 name = "pkgload"
@@ -319,6 +397,26 @@ dependencies = [
 ]
 
 [[packages]]
+name = "roxygen2"
+version = "8.0.0"
+source = { repository = "https://cran.r-project.org/" }
+force_source = false
+dependencies = [
+    "brew",
+    { name = "cli", requirement = "(>= 3.3.0)" },
+    "commonmark",
+    { name = "desc", requirement = "(>= 1.2.0)" },
+    "knitr",
+    "lifecycle",
+    { name = "pkgload", requirement = "(>= 1.5.2)" },
+    { name = "R6", requirement = "(>= 2.1.2)" },
+    { name = "rlang", requirement = "(>= 1.1.0)" },
+    "withr",
+    "xml2",
+    "cpp11",
+]
+
+[[packages]]
 name = "rprojroot"
 version = "2.1.1"
 source = { repository = "https://cran.r-project.org/" }
@@ -379,6 +477,18 @@ dependencies = [
 ]
 
 [[packages]]
+name = "vctrs"
+version = "0.7.3"
+source = { repository = "https://cran.r-project.org/" }
+force_source = false
+dependencies = [
+    { name = "cli", requirement = "(>= 3.4.0)" },
+    "glue",
+    { name = "lifecycle", requirement = "(>= 1.0.3)" },
+    { name = "rlang", requirement = "(>= 1.1.7)" },
+]
+
+[[packages]]
 name = "waldo"
 version = "0.6.2"
 source = { repository = "https://cran.r-project.org/" }
@@ -403,6 +513,16 @@ version = "0.60"
 source = { repository = "https://cran.r-project.org/" }
 force_source = false
 dependencies = []
+
+[[packages]]
+name = "xml2"
+version = "1.6.0"
+source = { repository = "https://cran.r-project.org/" }
+force_source = false
+dependencies = [
+    "cli",
+    { name = "rlang", requirement = "(>= 1.1.0)" },
+]
 
 [[packages]]
 name = "yaml"

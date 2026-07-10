@@ -66,9 +66,14 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
   ss <- res$results[["static-slice"]]$results
   entry <- if (!is.null(ss) && length(ss) > 0) ss[[1]] else list()
   ids <- entry$slice$result
-  # flowR echoes an unresolved criterion back with an empty reconstruction rather
-  # than failing, so treat empty reconstructed code as "matched nothing".
-  if (length(ids) == 0 || !nzchar(trimws(entry$reconstruct$code %||% ""))) {
+  loc_map <- tryCatch(make_id_to_location_map(an$analysis$results$normalize$ast),
+                      error = function(e) list())
+  lines <- .flowr_covered_lines(ids, loc_map)
+  # flowR echoes an unresolved criterion back rather than failing. A slice hit
+  # something if it either covers source lines or reconstructs code: folder
+  # slices reconstruct no combined code (but cover lines), so check both and only
+  # warn when neither is present.
+  if (length(lines) == 0 && !nzchar(trimws(entry$reconstruct$code %||% ""))) {
     warning("slice criteria matched nothing: ", paste(criterion, collapse = ", "),
             ".\n  Criteria look like \"line@name\", \"line:col\" or \"$id\"; ",
             "check the line/name exists.", call. = FALSE)
@@ -77,14 +82,12 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
   .flowr_timing_detail(c(.flowr_analysis_phases(an$analysis),
                          slice = entry$slice$.meta$timing,
                          reconstruct = entry$reconstruct$.meta$timing))
-  loc_map <- tryCatch(make_id_to_location_map(an$analysis$results$normalize$ast),
-                      error = function(e) list())
   structure(
     list(
       code = entry$reconstruct$code,
       ids = ids,
       original = original,
-      lines = .flowr_covered_lines(ids, loc_map),
+      lines = lines,
       criteria = as.character(criterion),
       direction = direction,
       style = style,
