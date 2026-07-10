@@ -4,12 +4,14 @@
 \alias{flowr_uninstall}
 \title{Remove cached flowR engines}
 \usage{
-flowr_uninstall(version = NULL, docker = FALSE)
+flowr_uninstall(version = NULL, docker = FALSE, quiet = FALSE)
 }
 \arguments{
 \item{version}{A version to remove, or \code{NULL} to remove the whole cache.}
 
 \item{docker}{Also remove the flowR docker image for \code{version} (best effort).}
+
+\item{quiet}{Suppress the summary message.}
 }
 \value{
 \code{TRUE}, invisibly.
@@ -17,4 +19,6 @@ flowr_uninstall(version = NULL, docker = FALSE)
 \description{
 Removes downloaded binary/node engines from the cache. The docker image is
 left in place unless \code{docker = TRUE} (removing it needs the docker daemon).
+The \code{bundled} engine cannot be removed: flowR's JS+wasm bundle ships inside
+the package, so \code{flowr_installed()} can stay \code{TRUE} after uninstalling.
 }

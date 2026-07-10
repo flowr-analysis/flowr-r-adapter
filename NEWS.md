@@ -1,9 +1,5 @@
 # flowr 0.2.0
 
-* Big Engine Rewrite (flowR Binaries)
-
-# flowr 0.1.0
-
 A major (AI-assisted) rewrite of the adapter into a robust, engine-selectable
 flowR client. flowR itself is unchanged; this package wraps it.
 

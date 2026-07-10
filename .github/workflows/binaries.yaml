@@ -42,7 +42,9 @@ jobs:
         shell: bash
         run: |
           npm init -y
-          npm install --no-fund --no-audit "@eagleoutice/flowr@${{ inputs.flowr_version }}"
+          # `ignore` is a peer import of flowR's CLI that bun must resolve when
+          # compiling; install it alongside flowR.
+          npm install --no-fund --no-audit "@eagleoutice/flowr@${{ inputs.flowr_version }}" ignore
 
       - name: Compile a single self-contained executable
         shell: bash
@@ -56,7 +58,7 @@ jobs:
           || bun build ./node_modules/@eagleoutice/flowr/cli/flowr.js \
             --compile --minify --sourcemap=none --outfile "flowr${ext}"
 
-      - name: Shrink the executable (UPX)
+      - name: Shrink the executable (UPX, max compression)
         if: matrix.os != 'macos-13' && matrix.os != 'macos-latest'
         shell: bash
         run: |
@@ -65,7 +67,29 @@ jobs:
           if command -v upx >/dev/null 2>&1; then :; \
           elif command -v choco >/dev/null 2>&1; then choco install upx -y || true; \
           else sudo apt-get update && sudo apt-get install -y upx-ucl || true; fi
-          upx --best --lzma "flowr${ext}" || echo "UPX skipped (not compressible)"
+          before=$(wc -c < "flowr${ext}")
+          # --ultra-brute is the strongest UPX mode (self-extracts at launch)
+          upx --ultra-brute "flowr${ext}" || echo "UPX skipped (not compressible)"
+          echo "size: ${before} -> $(wc -c < "flowr${ext}") bytes"
+
+      # Never ship a binary that the compression broke: confirm it still boots
+      # flowR (prints the REPL banner) before packaging.
+      - name: Smoke-test the binary
+        shell: bash
+        run: |
+          ext=""
+          [ "${{ matrix.target }}" = "win-x64" ] && ext=".exe"
+          wr=$(find node_modules -name 'tree-sitter-r.wasm' | head -1)
+          wt=$(find node_modules -name 'tree-sitter.wasm'   | head -1)
+          printf ':quit\n' | "./flowr${ext}" --default-engine tree-sitter \
+            --engine.r-shell.disabled \
+            --engine.tree-sitter.wasm-path "$wr" \
+            --engine.tree-sitter.tree-sitter-wasm-path "$wt" > smoke.log 2>&1 || true
+          if grep -q "flowR repl" smoke.log; then
+            echo "smoke test OK"
+          else
+            echo "SMOKE TEST FAILED - the binary does not run:"; cat smoke.log; exit 1
+          fi
 
       - name: Package binary + tree-sitter wasm
         shell: bash

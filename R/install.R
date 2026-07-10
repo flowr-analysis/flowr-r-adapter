@@ -155,12 +155,15 @@ flowr_update <- function(version = NULL, engine = c("binary", "node", "docker"),
 #'
 #' Removes downloaded binary/node engines from the cache. The docker image is
 #' left in place unless `docker = TRUE` (removing it needs the docker daemon).
+#' The `bundled` engine cannot be removed: flowR's JS+wasm bundle ships inside
+#' the package, so `flowr_installed()` can stay `TRUE` after uninstalling.
 #'
 #' @param version A version to remove, or `NULL` to remove the whole cache.
 #' @param docker Also remove the flowR docker image for `version` (best effort).
+#' @param quiet Suppress the summary message.
 #' @return `TRUE`, invisibly.
 #' @export
-flowr_uninstall <- function(version = NULL, docker = FALSE) {
+flowr_uninstall <- function(version = NULL, docker = FALSE, quiet = FALSE) {
   if (is.null(version)) {
     unlink(.flowr_cache_dir(), recursive = TRUE)
   } else {
@@ -171,6 +174,14 @@ flowr_uninstall <- function(version = NULL, docker = FALSE) {
                               std_out = FALSE, std_err = FALSE),
                error = function(e) NULL)
     }
+  }
+  if (!quiet && !isTRUE(flowr_option("quiet"))) {
+    msg <- "[flowr] removed downloaded engines from the cache."
+    if (.flowr_bundled_available()) {
+      msg <- paste0(msg, " The shipped bundle (engine = \"bundled\", needs Node) ",
+                    "remains available.")
+    }
+    message(msg)
   }
   invisible(TRUE)
 }

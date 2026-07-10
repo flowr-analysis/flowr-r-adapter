@@ -61,7 +61,18 @@
 # Download + integrity-check + extract --------------------------------------
 
 .flowr_download_verify <- function(url, sha256, dest) {
-  utils::download.file(url, dest, mode = "wb", quiet = flowr_option("quiet"))
+  ok <- tryCatch({
+    suppressWarnings(utils::download.file(url, dest, mode = "wb",
+                                          quiet = flowr_option("quiet")))
+    file.exists(dest) && file.info(dest)$size > 0
+  }, error = function(e) FALSE)
+  if (!isTRUE(ok)) {
+    unlink(dest)
+    stop("could not download the flowR binary from\n  ", url,
+         "\n(the prebuilt binary for this platform/version may not be published ",
+         "yet). Use flowr_connect(engine = \"bundled\") or ",
+         "flowr_install(engine = \"node\") instead.", call. = FALSE)
+  }
   if (!is.null(sha256)) {
     got <- .flowr_sha256(dest)
     if (!identical(tolower(got), tolower(sha256))) {
@@ -144,11 +155,13 @@
   repo <- flowr_option("binary_repo")
   url <- sprintf("https://github.com/%s/releases/download/flowr-v%s/flowr-%s-%s.tar.gz",
                  repo, version, version, key)
-  sha <- tryCatch({
+  # probe the checksum sidecar; a 404 just means no prebuilt binary is published
+  # for this version/platform yet, so swallow the download warning
+  sha <- tryCatch(suppressWarnings({
     tmp <- tempfile()
     utils::download.file(paste0(url, ".sha256"), tmp, quiet = TRUE, mode = "wb")
     trimws(sub("\\s.*$", "", readLines(tmp, warn = FALSE)[1]))
-  }, error = function(e) NULL)
+  }), error = function(e) NULL)
   list(url = url, sha256 = sha, sig = paste0(url, ".sig"))
 }
 
@@ -209,10 +222,13 @@
   plat <- .flowr_platform()
   src <- .flowr_binary_source(version, plat$key)
   if (is.null(src$sha256) && isTRUE(flowr_option("secure"))) {
-    stop("refusing to install an unverifiable flowR binary in secure mode ",
-         "(no checksum found for ", plat$key, " / ", version, ").\n",
-         "Use the Node engine (flowr_install(engine = \"node\")) or set ",
-         "options(flowr.secure = FALSE).", call. = FALSE)
+    stop("no verifiable flowR binary is available for ", plat$key, " / ", version,
+         " (the prebuilt binary may not be published yet).\n",
+         "You do not need it: use the shipped bundle instead - ",
+         "flowr_connect(engine = \"bundled\") (needs Node, no download). ",
+         "Or the Node engine (flowr_install(engine = \"node\")), ",
+         "or set options(flowr.secure = FALSE) to allow an unverified binary.",
+         call. = FALSE)
   }
   dir <- .flowr_binary_dir(version, plat$key)
   dir.create(dir, recursive = TRUE, showWarnings = FALSE)
