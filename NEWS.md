@@ -1,3 +1,5 @@
+# flowr 0.2.1
+
 # flowr 0.2.0
 
 A major (AI-assisted) rewrite of the adapter into a robust, engine-selectable
