@@ -20,6 +20,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # a PAT/App token in RELEASE_TOKEN (added to the branch bypass list) can
+          # push to a protected main; otherwise fall back to the default token
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
       - id: bump
         shell: bash
@@ -50,7 +53,7 @@ jobs:
 
       - if: steps.bump.outputs.part != 'none'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
           NEW: ${{ steps.ver.outputs.version }}
         shell: bash
         run: |
