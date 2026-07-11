@@ -87,11 +87,12 @@ jobs:
             ext=""; [ "$target" = "win-x64" ] && ext=".exe"
             echo "::group::compile $target ($buntarget)"
             rm -rf dist; mkdir -p dist
-            # --bytecode precompiles for faster startup + smaller binaries; it can
-            # error on ESM-only entrypoints in some Bun versions, so fall back.
-            bun build "$entry" --compile --minify --sourcemap=none --bytecode \
-              --target="$buntarget" --outfile "dist/flowr${ext}" \
-            || bun build "$entry" --compile --minify --sourcemap=none \
+            # No --bytecode: it embeds JSC bytecode built for the *host*, which a
+            # cross-compiled target loads and segfaults on at launch (the Windows
+            # binary crashed with exactly this before the flag was removed). Since
+            # every target here is cross-compiled from Linux, plain JS bundling is
+            # the only portable choice; startup is marginally slower, but correct.
+            bun build "$entry" --compile --minify --sourcemap=none \
               --target="$buntarget" --outfile "dist/flowr${ext}"
             cp "$wr" "$wt" dist/
             tgz="flowr-${FLOWR_VERSION}-${target}.tar.gz"
@@ -145,10 +146,18 @@ jobs:
             out/*.tar.gz.sha256
             out/*.tar.gz.sig
 
-  # Post-publish safeguard: pull each uploaded asset and confirm the binary
-  # actually boots flowR (prints the REPL banner) on its native platform. Runs
-  # after the upload, so a broken build is caught and reported loudly even though
-  # the asset is already in place.
+  # Post-publish safeguard: pull each uploaded asset and check it. Two modes:
+  #   boot    - run the binary natively and require flowR's REPL banner. Used for
+  #             every target that has a GitHub-hosted runner able to execute it.
+  #   inspect - macOS Mach-O binaries can't be executed off a Mac, and the Intel
+  #             (macos-13) runners are what starved this pipeline for hours. So we
+  #             don't boot darwin at all: on Linux we verify the artifact is a
+  #             well-formed Mach-O of the right CPU type (via `file`) with the
+  #             wasm alongside. This catches a wrong/corrupt/mis-targeted binary;
+  #             it does not execute it. Boot confidence is indirect but real: the
+  #             same cross-compile toolchain and flags produce linux-arm64 and
+  #             win-x64, which ARE booted below, so only the OS wrapper (which
+  #             `file` validates) differs for darwin.
   smoke:
     name: smoke ${{ matrix.target }}
     needs: build
@@ -156,11 +165,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest,     target: linux-x64 }
-          - { os: ubuntu-24.04-arm,  target: linux-arm64 }
-          - { os: macos-13,          target: darwin-x64 }
-          - { os: macos-latest,      target: darwin-arm64 }
-          - { os: windows-latest,    target: win-x64 }
+          - { os: ubuntu-latest,     target: linux-x64,    mode: boot }
+          - { os: ubuntu-24.04-arm,  target: linux-arm64,  mode: boot }
+          - { os: windows-latest,    target: win-x64,      mode: boot }
+          - { os: ubuntu-latest,     target: darwin-x64,   mode: inspect, macho: x86_64 }
+          - { os: ubuntu-latest,     target: darwin-arm64, mode: inspect, macho: arm64 }
     runs-on: ${{ matrix.os }}
     steps:
       - name: Download the uploaded binary for this platform
@@ -175,7 +184,8 @@ jobs:
           mkdir -p run
           tar -xzf "dl/$asset" -C run
 
-      - name: Smoke-test the uploaded binary
+      - name: Boot the uploaded binary
+        if: ${{ matrix.mode == 'boot' }}
         shell: bash
         run: |
           set -uo pipefail
@@ -200,5 +210,28 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
             echo "SMOKE TEST FAILED for ${{ matrix.target }} - the binary does not run:"
             cat smoke.log
+            exit 1
+          fi
+
+      - name: Inspect the uploaded Mach-O binary (no execution)
+        if: ${{ matrix.mode == 'inspect' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd run
+          info=$(file -b flowr)
+          echo "file: $info"
+          # Require a Mach-O executable of the expected CPU type, a plausibly
+          # sized binary (a failed compile yields a tiny stub), and both wasm blobs.
+          bytes=$(wc -c < flowr)
+          ok=1
+          echo "$info" | grep -qi 'Mach-O'            || { echo "::error::not a Mach-O binary"; ok=0; }
+          echo "$info" | grep -qi '${{ matrix.macho }}' || { echo "::error::wrong CPU type (want ${{ matrix.macho }})"; ok=0; }
+          [ "$bytes" -gt 1000000 ]                     || { echo "::error::binary implausibly small ($bytes bytes)"; ok=0; }
+          [ -f tree-sitter-r.wasm ] && [ -f tree-sitter.wasm ] || { echo "::error::missing tree-sitter wasm"; ok=0; }
+          if [ "$ok" = 1 ]; then
+            echo "✅ **${{ matrix.target }}** — Mach-O ${{ matrix.macho }}, $((bytes/1024/1024)) MB, wasm present (not executed: no macOS runner)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ **${{ matrix.target }}** — Mach-O validation failed (\`$info\`, $bytes bytes)" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi

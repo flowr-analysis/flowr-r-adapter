@@ -23,6 +23,8 @@ engine selection, the query API and the REPL.
 Useful links:
 \itemize{
   \item \url{https://github.com/flowr-analysis/flowr-r-adapter}
+  \item \url{https://github.com/flowr-analysis/flowr}
+  \item \url{https://flowr-analysis.github.io/flowr/}
   \item Report bugs at \url{https://github.com/flowr-analysis/flowr-r-adapter/issues}
 }
 

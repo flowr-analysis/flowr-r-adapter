@@ -13,7 +13,9 @@ flowr_graph(
 )
 }
 \arguments{
-\item{code}{A string of R source code. Provide this, \code{file} or \code{folder}.}
+\item{code}{A string of R source code. Provide \code{code}, \code{file} or \code{folder};
+with none, the current R project is analysed (see the \emph{Analysing the
+current project} section).}
 
 \item{file}{Path to a single R file to analyse.}
 
@@ -32,6 +34,26 @@ A \code{flowr_graph}: a list of \code{vertices} and \code{edges} data frames.
 \strong{Experimental.} Runs the \code{dataflow} (or \code{call-graph}) query and returns the
 graph as tidy \code{vertices} (\code{id}, \code{tag}) and \code{edges} (\code{from}, \code{to}, \code{type}) data
 frames, ready for \code{\link[=flowr_as_igraph]{flowr_as_igraph()}} or any graph tool.
+}
+\section{Analysing the current project}{
+
+Every command that takes \code{code}/\code{file}/\code{folder} follows the same rule: pass
+\code{code} (a string), \code{file} (one \code{.R} file) or \code{folder} (analysed recursively),
+and with \strong{none} of them the command analyses the \strong{current R project}.
+flowr walks up from the working directory to the \emph{outermost} project root ---
+a \code{DESCRIPTION} or \code{.Rproj}, else the enclosing git root, else the working
+directory if it holds \code{.R} files --- analyses that project's \code{.R} files, and
+reports the root it chose (unless \code{options(flowr.quiet = TRUE)}). If nothing
+looks like a project, the command errors asking for \code{code}, \code{file} or
+\code{folder}.
+}
+
+\examples{
+\dontrun{
+g <- flowr_graph("x <- 1\ny <- x + 1")
+head(g$vertices)
+head(g$edges)
+}
 }
 \seealso{
 \code{\link[=flowr_as_igraph]{flowr_as_igraph()}}

@@ -14,7 +14,9 @@ query(
 )
 }
 \arguments{
-\item{code}{A string of R source code. Provide this, \code{file} or \code{folder}.}
+\item{code}{A string of R source code. Provide \code{code}, \code{file} or \code{folder};
+with none, the current R project is analysed (see the \emph{Analysing the
+current project} section).}
 
 \item{query}{The query or queries to run. See \emph{Details} for the shape.}
 
@@ -42,6 +44,25 @@ Supported query types in flowR 2.11.1 include \code{dependencies},
 \code{normalized-ast}, \code{linter}, \code{location-map}, \code{call-graph}, and more. Pass
 extra arguments by using the object form, e.g.
 \code{query(code, list(type = "static-slice", criteria = I("3@x")))}.
+}
+\section{Analysing the current project}{
+
+Every command that takes \code{code}/\code{file}/\code{folder} follows the same rule: pass
+\code{code} (a string), \code{file} (one \code{.R} file) or \code{folder} (analysed recursively),
+and with \strong{none} of them the command analyses the \strong{current R project}.
+flowr walks up from the working directory to the \emph{outermost} project root ---
+a \code{DESCRIPTION} or \code{.Rproj}, else the enclosing git root, else the working
+directory if it holds \code{.R} files --- analyses that project's \code{.R} files, and
+reports the root it chose (unless \code{options(flowr.quiet = TRUE)}). If nothing
+looks like a project, the command errors asking for \code{code}, \code{file} or
+\code{folder}.
+}
+
+\examples{
+\dontrun{
+query("library(dplyr)\nd <- read.csv('in.csv')", "dependencies")$dependencies
+query("x <- 1\ncat(x)", c("dataflow", "id-map"))   # several at once
+}
 }
 \seealso{
 \code{\link[=flowr_overview]{flowr_overview()}}, \code{\link[=dataflow]{dataflow()}}

@@ -15,3 +15,9 @@ is_flowr_session(x)
 \description{
 Is this a flowR session?
 }
+\examples{
+is_flowr_session(1)              # FALSE
+\dontrun{
+is_flowr_session(flowr_connect())
+}
+}

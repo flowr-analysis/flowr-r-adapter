@@ -99,7 +99,7 @@ flowr_connect <- function(engine = flowr_option("engine"),
     }
     Sys.sleep(0.1)
   }
-  stop("could not connect to flowR server at ", host, ":", port, call. = FALSE)
+  .flowr_stop("could not connect to flowR server at ", host, ":", port)
 }
 
 #' Close the flowR session and release every resource it owns
@@ -110,6 +110,11 @@ flowr_connect <- function(engine = flowr_option("engine"),
 #' @param session The session to close; defaults to the central session.
 #' @return `TRUE`, invisibly.
 #' @export
+#' @examples
+#' \dontrun{
+#' slice("x <- 1\ncat(x)", "2@x")  # opens the shared session
+#' flowr_disconnect()               # close it and stop the engine
+#' }
 flowr_disconnect <- function(session = .flowr_state$default) {
   if (is.null(session) || isTRUE(session$closed)) {
     return(invisible(TRUE))
@@ -140,6 +145,11 @@ print.flowr_session <- function(x, ...) {
 #' @param x Object to test.
 #' @return `TRUE`/`FALSE`.
 #' @export
+#' @examples
+#' is_flowr_session(1)              # FALSE
+#' \dontrun{
+#' is_flowr_session(flowr_connect())
+#' }
 is_flowr_session <- function(x) inherits(x, "flowr_session")
 
 # Default (implicit) session --------------------------------------------------
@@ -153,6 +163,11 @@ is_flowr_session <- function(x) inherits(x, "flowr_session")
 #' @param ... Passed to [flowr_connect()] when the session is first created.
 #' @return A `flowr_session`.
 #' @export
+#' @examples
+#' \dontrun{
+#' s <- flowr_default_session()     # the shared session (created on first use)
+#' is_flowr_session(s)
+#' }
 flowr_default_session <- function(...) {
   s <- .flowr_state$default
   if (!is.null(s) && !isTRUE(s$closed)) {
@@ -167,10 +182,10 @@ flowr_default_session <- function(...) {
     return(flowr_default_session())
   }
   if (!is_flowr_session(session)) {
-    stop("`session` must be a flowr_session (from flowr_connect())", call. = FALSE)
+    .flowr_stop("`session` must be a flowr_session (from flowr_connect())")
   }
   if (isTRUE(session$closed)) {
-    stop("this flowr_session is closed", call. = FALSE)
+    .flowr_stop("this flowr_session is closed")
   }
   session
 }
@@ -189,7 +204,7 @@ flowr_analyze <- function(code = NULL, file = NULL, files = NULL, cfg = FALSE,
                           session = NULL) {
   session <- .flowr_resolve_session(session)
   if (is.null(code) && is.null(file) && is.null(files)) {
-    stop("provide one of `code`, `file` or `files`", call. = FALSE)
+    .flowr_stop("provide `code`, `file` or `files`")
   }
   paths <- if (!is.null(files)) normalizePath(files, mustWork = TRUE)
            else if (!is.null(file)) normalizePath(file, mustWork = TRUE)
@@ -235,6 +250,10 @@ flowr_analyze <- function(code = NULL, file = NULL, files = NULL, cfg = FALSE,
 #' @param session A `flowr_session`; the central default is used when `NULL`.
 #' @return `NULL`, invisibly.
 #' @export
+#' @examples
+#' \dontrun{
+#' flowr_clear_cache()              # drop cached analyses for the active session
+#' }
 flowr_clear_cache <- function(session = NULL) {
   session <- .flowr_resolve_session(session)
   rm(list = ls(session$cache), envir = session$cache)

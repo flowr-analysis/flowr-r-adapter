@@ -15,3 +15,9 @@ A named list mapping node id (as string) to a \verb{[line1, col1, line2, col2]} 
 \description{
 Map the node ids of a slice (or analysis) to source locations
 }
+\examples{
+\dontrun{
+s <- slice("x <- 1\ny <- 2\ncat(x)", "3@x")
+flowr_locations(s)               # node id -> source location
+}
+}

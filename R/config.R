@@ -44,7 +44,7 @@ flowr_option <- function(name, value = NULL) {
     return(value)
   }
   if (!name %in% names(.flowr_defaults)) {
-    stop("unknown flowr option: ", name, call. = FALSE)
+    .flowr_stop("unknown flowr option: ", name)
   }
   opt <- getOption(paste0("flowr.", name))
   if (!is.null(opt)) {
@@ -77,6 +77,8 @@ flowr_option <- function(name, value = NULL) {
 #'
 #' @return The resolved config file path, or `NA` when none is found.
 #' @export
+#' @examples
+#' flowr_config_file()   # path to the active flowr.json, or NA when none
 flowr_config_file <- function() {
   p <- getOption("flowr.config_file")
   if (!is.null(p)) {
@@ -112,8 +114,8 @@ flowr_config_file <- function() {
   parsed <- tryCatch(
     jsonlite::fromJSON(path, simplifyVector = TRUE),
     error = function(e) {
-      warning("could not read flowr config file ", path, ": ",
-              conditionMessage(e), call. = FALSE)
+      .flowr_warn("could not read flowr config file ", path, ": ",
+                  conditionMessage(e))
       list()
     }
   )
@@ -303,14 +305,12 @@ print.flowr_config <- function(x, ...) {
 flowr_set_config <- function(..., persist = FALSE) {
   vals <- list(...)
   if (length(vals) == 0 || is.null(names(vals)) || any(!nzchar(names(vals)))) {
-    stop("supply named settings, e.g. flowr_set_config(engine = \"binary\")",
-         call. = FALSE)
+    .flowr_stop("supply named settings, e.g. flowr_set_config(engine = \"binary\")")
   }
   unknown <- setdiff(names(vals), names(.flowr_defaults))
   if (length(unknown) > 0) {
-    stop("unknown flowr setting(s): ", paste(unknown, collapse = ", "),
-         "\n  known settings: ", paste(names(.flowr_defaults), collapse = ", "),
-         call. = FALSE)
+    .flowr_stop("unknown flowr setting(s): ", paste(unknown, collapse = ", "),
+         "\n  known settings: ", paste(names(.flowr_defaults), collapse = ", "))
   }
   # coerce each value to the type of its default, so "300" and 300 both work
   vals <- Map(function(v, nm) {

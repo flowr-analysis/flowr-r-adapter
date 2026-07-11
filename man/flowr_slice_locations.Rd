@@ -18,3 +18,8 @@ locations (node ids without a location, such as built-in functions, are
 dropped). This is the engine-agnostic core used by front-ends (e.g. the
 RStudio addin) to highlight a slice.
 }
+\examples{
+\dontrun{
+flowr_slice_locations(slice("x <- 1\ncat(x)", "2@x"))
+}
+}

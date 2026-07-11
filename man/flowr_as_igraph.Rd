@@ -17,3 +17,9 @@ An \code{igraph} object (requires the suggested \code{igraph} package).
 \description{
 \strong{Experimental.}
 }
+\examples{
+\dontrun{
+ig <- flowr_as_igraph(flowr_graph("x <- 1\ny <- x + 1"))
+igraph::vcount(ig)
+}
+}

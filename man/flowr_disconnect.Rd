@@ -16,3 +16,9 @@ flowr_disconnect(session = .flowr_state$default)
 Closes the socket, drops the connection's read buffer, and stops the engine
 process if the session started it. Safe to call more than once.
 }
+\examples{
+\dontrun{
+slice("x <- 1\ncat(x)", "2@x")  # opens the shared session
+flowr_disconnect()               # close it and stop the engine
+}
+}

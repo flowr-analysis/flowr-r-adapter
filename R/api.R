@@ -9,7 +9,9 @@
 #' Computes a program slice for one or more slicing criteria and returns the
 #' reconstructed, sliced code together with the ids of the included nodes.
 #'
-#' @param code A string of R source code. Provide this, `file` or `folder`.
+#' @param code A string of R source code. Provide `code`, `file` or `folder`;
+#'   with none, the current R project is analysed (see the *Analysing the
+#'   current project* section).
 #' @param criterion Slicing criteria, a character vector such as `"3@x"`
 #'   (line 3, variable `x`), `"7:3"` (line:column) or `"$42"` (a node id).
 #' @param direction Slice `"backward"` (default: everything the criterion
@@ -26,6 +28,16 @@
 #'   node ids), `original` (the input source), `lines` (original line numbers in
 #'   the slice), plus `criteria`, `direction` and the raw `response`. Printing
 #'   shows a colored git-style diff by default; see [print.flowr_slice()].
+#' @section Analysing the current project:
+#' Every command that takes `code`/`file`/`folder` follows the same rule: pass
+#' `code` (a string), `file` (one `.R` file) or `folder` (analysed recursively),
+#' and with **none** of them the command analyses the **current R project**.
+#' flowr walks up from the working directory to the *outermost* project root ---
+#' a `DESCRIPTION` or `.Rproj`, else the enclosing git root, else the working
+#' directory if it holds `.R` files --- analyses that project's `.R` files, and
+#' reports the root it chose (unless `options(flowr.quiet = TRUE)`). If nothing
+#' looks like a project, the command errors asking for `code`, `file` or
+#' `folder`.
 #' @seealso [query()], [flowr_locations()]
 #' @export
 #' @examples
@@ -41,14 +53,14 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
   style <- match.arg(style, c("diff", "gray", "code"))
   # validate before starting an engine, so bad calls fail fast
   if (missing(criterion) || length(criterion) == 0) {
-    stop("provide a slicing `criterion`, e.g. \"3@x\"", call. = FALSE)
+    .flowr_stop("provide a slicing `criterion`, e.g. \"3@x\"")
   }
   # accept a vector of criteria and flowR's ";"-separated form ("3@print;2@y"),
   # so both slice(code, c("3@print", "2@y")) and slice(code, "3@print;2@y") work
   criterion <- trimws(unlist(strsplit(as.character(criterion), ";", fixed = TRUE)))
   criterion <- criterion[nzchar(criterion)]
   if (length(criterion) == 0) {
-    stop("provide a slicing `criterion`, e.g. \"3@x\"", call. = FALSE)
+    .flowr_stop("provide a slicing `criterion`, e.g. \"3@x\"")
   }
   session <- .flowr_resolve_session(session)
   src <- .flowr_input_analysis(code, file, folder, cfg, session)
@@ -74,9 +86,9 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
   # slices reconstruct no combined code (but cover lines), so check both and only
   # warn when neither is present.
   if (length(lines) == 0 && !nzchar(trimws(entry$reconstruct$code %||% ""))) {
-    warning("slice criteria matched nothing: ", paste(criterion, collapse = ", "),
-            ".\n  Criteria look like \"line@name\", \"line:col\" or \"$id\"; ",
-            "check the line/name exists.", call. = FALSE)
+    .flowr_warn("slice criteria matched nothing: ", paste(criterion, collapse = ", "),
+                "\n  criteria look like \"line@name\", \"line:col\" or \"$id\"; ",
+                "check the line/name exists")
   }
   # record flowR's own phase timings so `flowr.timing` shows the breakdown
   .flowr_timing_detail(c(.flowr_analysis_phases(an$analysis),
@@ -156,8 +168,8 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
   }
   folder <- .flowr_project_root()
   if (is.null(folder)) {
-    stop("provide `code`, `file` or `folder` (or call from inside an R project ",
-         "with .R files or a DESCRIPTION)", call. = FALSE)
+    .flowr_stop("provide `code`, `file` or `folder` (or call from inside an R project ",
+         "with .R files or a DESCRIPTION)")
   }
   if (!isTRUE(flowr_option("quiet"))) {
     message("[flowr] auto-selected root: ", .flowr_root_label(folder), " at ", folder)
@@ -178,7 +190,7 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
   if (!is.null(folder)) {
     files <- list.files(folder, pattern = "\\.[rR]$", recursive = TRUE, full.names = TRUE)
     if (length(files) == 0) {
-      stop("no .R files found in ", folder, call. = FALSE)
+      .flowr_stop("no .R files found in ", folder)
     }
     list(an = flowr_analyze(files = files, cfg = cfg, session = session),
          original = NULL, folder = folder)
@@ -369,7 +381,13 @@ print.flowr_slice <- function(x, style = x$style %||% getOption("flowr.slice_sty
 #'   extra arguments by using the object form, e.g.
 #'   `query(code, list(type = "static-slice", criteria = I("3@x")))`.
 #' @seealso [flowr_overview()], [dataflow()]
+#' @inheritSection slice Analysing the current project
 #' @export
+#' @examples
+#' \dontrun{
+#' query("library(dplyr)\nd <- read.csv('in.csv')", "dependencies")$dependencies
+#' query("x <- 1\ncat(x)", c("dataflow", "id-map"))   # several at once
+#' }
 query <- function(code = NULL, query, file = NULL, folder = NULL, cfg = FALSE, session = NULL) {
   done <- .flowr_timer("query"); on.exit(done(), add = TRUE)
   qs <- .flowr_normalize_query(query)
@@ -395,8 +413,7 @@ query <- function(code = NULL, query, file = NULL, folder = NULL, cfg = FALSE, s
   if (is.list(query)) {
     return(query)
   }
-  stop("`query` must be a query type name, a query object, or a list of them",
-       call. = FALSE)
+  .flowr_stop("`query` must be a query type name, a query object, or a list of them")
 }
 
 # Thin wrapper around the `dependencies` query (libraries, sources, reads,
@@ -412,7 +429,12 @@ dependencies <- function(code = NULL, file = NULL, folder = NULL, session = NULL
 #'
 #' @inheritParams slice
 #' @return The `dataflow` query result.
+#' @inheritSection slice Analysing the current project
 #' @export
+#' @examples
+#' \dontrun{
+#' dataflow("x <- 1\ny <- x + 1")   # the dataflow graph of the snippet
+#' }
 dataflow <- function(code = NULL, file = NULL, folder = NULL, session = NULL) {
   done <- .flowr_timer("dataflow"); on.exit(done(), add = TRUE)
   query(code = code, file = file, folder = folder,
@@ -430,6 +452,7 @@ dataflow <- function(code = NULL, file = NULL, folder = NULL, session = NULL) {
 #' @param with_dataflow Also include dataflow information in the result.
 #' @return A `flowr_project`: the `files` analysed and their `roleCounts`.
 #' @seealso [flowr_overview()], [query()]
+#' @inheritSection slice Analysing the current project
 #' @export
 #' @examples
 #' \dontrun{
@@ -502,8 +525,7 @@ flowr_repl <- function(expression = NULL, ansi = FALSE, session = NULL,
                        r_access = TRUE, native = TRUE) {
   if (is.null(expression)) {
     if (!interactive()) {
-      stop("flowr_repl() needs an `expression` in a non-interactive session",
-           call. = FALSE)
+      .flowr_stop("flowr_repl() needs an `expression` in a non-interactive session")
     }
     # Prefer flowR's own REPL: it has real history (up-arrow) and tab completion,
     # which the socket-relayed line loop (R's readline) cannot provide. You drive
@@ -599,14 +621,13 @@ flowr_console <- function(engine = flowr_option("engine"),
                           flowr_version = flowr_option("flowr_version"),
                           r_access = FALSE) {
   if (!interactive()) {
-    stop("flowr_console() needs an interactive terminal; use flowr_repl() otherwise.",
-         call. = FALSE)
+    .flowr_stop("flowr_console() needs an interactive terminal; use flowr_repl() otherwise")
   }
   eng <- .flowr_resolve_engine(engine, flowr_version)
   spec <- .flowr_engine_specs()[[eng]]
   if (is.null(spec$console)) {
-    stop("flowr_console() is not available for the '", eng, "' engine ",
-         "(no terminal handoff); use flowr_repl().", call. = FALSE)
+    .flowr_stop("flowr_console() is not available for the '", eng, "' engine ",
+         "(no terminal handoff); use flowr_repl().")
   }
   # r_access runs R you type, so it needs the r-shell engine and the
   # --r-session-access flag. You are driving the REPL, so this is on by default.
@@ -616,9 +637,8 @@ flowr_console <- function(engine = flowr_option("engine"),
     fe <- "r-shell"
     extra <- "--r-session-access"
   } else if (isTRUE(flowr_option("secure")) && identical(fe, "r-shell")) {
-    stop("secure mode forbids the r-shell engine; use flowr_engine = \"tree-sitter\", ",
-         "or flowr_console(r_access = TRUE) to deliberately allow R execution.",
-         call. = FALSE)
+    .flowr_stop("secure mode forbids the r-shell engine; use flowr_engine = \"tree-sitter\", ",
+         "or flowr_console(r_access = TRUE) to deliberately allow R execution.")
   }
   spec$ensure(flowr_version, flowr_option("quiet"))
   cc <- spec$console(flowr_version, fe)
@@ -653,11 +673,10 @@ flowr_console <- function(engine = flowr_option("engine"),
 flowr_watch <- function(file, action = function(f) print(flowr_overview(file = f)),
                         interval = 0.5) {
   if (!interactive()) {
-    stop("flowr_watch() needs an interactive session (it loops until interrupted).",
-         call. = FALSE)
+    .flowr_stop("flowr_watch() needs an interactive session (it loops until interrupted)")
   }
   if (!is.function(action)) {
-    stop("`action` must be a function of one argument (the file path)", call. = FALSE)
+    .flowr_stop("`action` must be a function of one argument (the file path)")
   }
   file <- normalizePath(file, mustWork = TRUE)
   message("[flowr] watching ", file, " - press Ctrl-C / Esc to stop ...")
@@ -680,6 +699,11 @@ flowr_watch <- function(file, action = function(f) print(flowr_overview(file = f
 #' @return A named list mapping node id (as string) to a `[line1, col1, line2,
 #'   col2]` location.
 #' @export
+#' @examples
+#' \dontrun{
+#' s <- slice("x <- 1\ny <- 2\ncat(x)", "3@x")
+#' flowr_locations(s)               # node id -> source location
+#' }
 flowr_locations <- function(x) {
   ast <- if (inherits(x, "flowr_slice")) x$analysis$results$normalize$ast else x
   make_id_to_location_map(ast)
@@ -695,9 +719,13 @@ flowr_locations <- function(x) {
 #' @param slice A `flowr_slice` from [slice()].
 #' @return A list of numeric length-4 location vectors.
 #' @export
+#' @examples
+#' \dontrun{
+#' flowr_slice_locations(slice("x <- 1\ncat(x)", "2@x"))
+#' }
 flowr_slice_locations <- function(slice) {
   if (!inherits(slice, "flowr_slice")) {
-    stop("`slice` must be a flowr_slice", call. = FALSE)
+    .flowr_stop("`slice` must be a flowr_slice")
   }
   location_map <- tryCatch(flowr_locations(slice), error = function(e) list())
   out <- list()

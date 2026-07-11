@@ -90,7 +90,7 @@
     reader$scanned <- length(buf)          # fully scanned, no newline yet
     remaining <- as.numeric(difftime(deadline, Sys.time(), units = "secs"))
     if (remaining <= 0) {
-      stop("flowR request timed out after ", round(timeout), "s", call. = FALSE)
+      .flowr_stop("flowR request timed out after ", round(timeout), "s")
     }
     ready <- socketSelect(list(con), write = FALSE, timeout = remaining)
     if (!isTRUE(ready)) {
@@ -99,7 +99,7 @@
     chunk <- readBin(con, what = "raw", n = 4194304L)
     if (length(chunk) == 0L) {
       # socket signalled readable but delivered nothing -> peer closed
-      stop("flowR server closed the connection unexpectedly", call. = FALSE)
+      .flowr_stop("flowR server closed the connection unexpectedly")
     }
     reader$buf <- c(buf, chunk)
   }
@@ -128,7 +128,7 @@
   res <- .flowr_parse(.flowr_read_message(con, reader, timeout))
   .flowr_log("<- ", res$type %||% "?")
   if (identical(res$type, "error")) {
-    stop("flowR error: ", res$reason %||% "unknown error", call. = FALSE)
+    .flowr_stop("flowR error: ", res$reason %||% "unknown error")
   }
   res
 }
@@ -143,7 +143,7 @@
   repeat {
     msg <- .flowr_parse(.flowr_read_message(con, reader, timeout))
     if (identical(msg$type, "error")) {
-      stop("flowR error: ", msg$reason %||% "unknown error", call. = FALSE)
+      .flowr_stop("flowR error: ", msg$reason %||% "unknown error")
     }
     if (identical(msg$type, end_type)) {
       break
@@ -154,6 +154,30 @@
 }
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
+
+# The package's single error entry point. Assembles its arguments into one
+# message like base `stop()` does, always raises without the (noisy, internal)
+# call, and tags the condition with class `flowr_error` so callers can catch
+# flowr's own errors specifically. Every user-facing error goes through this, so
+# they all read the same way. Use base `stop(cond)` only to re-raise an existing
+# condition unchanged.
+.flowr_stop <- function(..., class = NULL) {
+  cond <- structure(
+    class = c(class, "flowr_error", "error", "condition"),
+    list(message = .makeMessage(...), call = NULL)
+  )
+  stop(cond)
+}
+
+# Warning counterpart of `.flowr_stop()`: same house style, no internal call,
+# tagged `flowr_warning`. Every user-facing warning goes through this.
+.flowr_warn <- function(..., class = NULL) {
+  cond <- structure(
+    class = c(class, "flowr_warning", "warning", "condition"),
+    list(message = .makeMessage(...), call = NULL)
+  )
+  warning(cond)
+}
 
 # Close a client connection and drop its read buffer.
 .flowr_close <- function(con) {

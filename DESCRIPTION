@@ -4,25 +4,28 @@ Version: 0.2.4
 Authors@R: c(
     person("Florian", "Sihler", email = "florian.sihler@uni-ulm.de", role = c("aut", "cre")),
     person("flowr-analysis", role = "cph"))
-Description: A robust R client for flowR, a static dataflow analyzer and program
-    slicer for the R language. Connects to a flowR server over a simple,
-    newline-delimited JSON protocol and can obtain that server through several
-    interchangeable engines: flowR's JavaScript and WebAssembly bundle shipped
-    with the package (run on 'Node.js'), a self-contained downloaded binary, a
-    system or private 'Node.js' install, or 'Docker'. Supports program slicing,
-    the query API and the read-eval-print loop of flowR 2.11.1.
+Description: Static dataflow analysis and program slicing for R, powered by
+    flowR. Reduce a script to just the statements that affect a chosen variable
+    ('slicing'), extract what it depends on (libraries, sourced files, data read
+    and written), run flowR's query API, and drive its read-eval-print loop ---
+    helping you understand, debug, test and refactor unfamiliar or large R code
+    without reading all of it. The analysis runs in a local flowR server that
+    the package obtains through any of several interchangeable engines: flowR's
+    JavaScript and WebAssembly bundle shipped with the package (run on
+    'Node.js'), a self-contained downloaded binary, a system or private
+    'Node.js' install, or 'Docker'.
 License: GPL-3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Depends:
     R (>= 4.0.0)
 Imports:
+    digest (>= 0.6.0),
     jsonlite (>= 1.8.0),
     sys (>= 3.4),
     tools,
     utils
 Suggests:
-    digest (>= 0.6.0),
     testthat (>= 3.0.0),
     withr (>= 2.5.0),
     knitr (>= 1.40),
@@ -31,6 +34,8 @@ Suggests:
     openssl
 Config/testthat/edition: 3
 VignetteBuilder: knitr
-URL: https://github.com/flowr-analysis/flowr-r-adapter
+URL: https://github.com/flowr-analysis/flowr-r-adapter,
+    https://github.com/flowr-analysis/flowr,
+    https://flowr-analysis.github.io/flowr/
 BugReports: https://github.com/flowr-analysis/flowr-r-adapter/issues
 Config/roxygen2/version: 8.0.0

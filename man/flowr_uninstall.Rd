@@ -20,5 +20,11 @@ flowr_uninstall(version = NULL, docker = FALSE, quiet = FALSE)
 Removes downloaded binary/node engines from the cache. The docker image is
 left in place unless \code{docker = TRUE} (removing it needs the docker daemon).
 The \code{bundled} engine cannot be removed: flowR's JS+wasm bundle ships inside
-the package, so \code{flowr_installed()} can stay \code{TRUE} after uninstalling.
+the package, so \code{flowr_is_installed()} can stay \code{TRUE} after uninstalling.
+}
+\examples{
+\dontrun{
+flowr_uninstall()               # remove downloaded engines from the cache
+flowr_uninstall(docker = TRUE)  # also remove the pulled docker image
+}
 }

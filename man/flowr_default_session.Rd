@@ -17,3 +17,9 @@ Returns the single shared session, creating one on first use. The high-level
 helpers all use it, so \verb{library(flowr); slice(code, criterion)} works with no
 setup. Call \code{\link[=flowr_connect]{flowr_connect()}} to (re)create it with a specific engine.
 }
+\examples{
+\dontrun{
+s <- flowr_default_session()     # the shared session (created on first use)
+is_flowr_session(s)
+}
+}

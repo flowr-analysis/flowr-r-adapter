@@ -45,7 +45,7 @@ install the self-contained binary. Install an engine explicitly:
 ```{r}
 flowr_install()                    # binary engine, flowR 2.11.1
 flowr_install(engine = "node")     # Node engine
-flowr_installed()                  # TRUE / FALSE
+flowr_is_installed()               # TRUE / FALSE
 flowr_uninstall()                  # clear the cache
 ```
 

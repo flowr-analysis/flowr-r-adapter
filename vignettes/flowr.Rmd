@@ -17,6 +17,16 @@ dataflow analyzer and program slicer for R --- to your R session. It lets you
 script's *dependencies*, run flowR *queries*, and drive the flowR *REPL*, all
 from R.
 
+Why bother? When you meet an unfamiliar or overgrown script, you usually care
+about one thing at a time --- how a particular result is computed, which lines a
+bug can reach, what a function actually reads and writes. Slicing answers exactly
+that: instead of reading the whole file, you get back just the code that
+produces the value you asked about. That makes flowr handy for understanding,
+debugging, testing and refactoring R code, without changing a line of it.
+(How flowr obtains a flowR engine to do this --- a shipped bundle, a downloaded
+binary, Node.js or Docker --- is covered in `vignette("flowr-engines")`; the
+default just works.)
+
 ## Installation
 
 ```{r}
@@ -96,6 +106,33 @@ flowr_overview()    # the package's libraries, plots, reads/writes - ready to sl
 `inspect_project()`, `flowr_overview()`, `slice()`, `query()` and friends all
 accept `code`, `file` or `folder`; with none, they analyse the enclosing project.
 
+## Lint
+
+`lint()` runs flowR's linter and returns the findings as a tidy data frame whose
+columns match those of the [lintr](https://lintr.r-lib.org/) package
+(`filename`, `line_number`, `column_number`, `type`, `message`, `line`,
+`linter`), so it drops straight into lintr-based reporting or CI. flowR flags
+things like absolute file paths, unused definitions, naming conventions,
+deprecated or network functions, unseeded randomness, dead code and possible
+leaked credentials.
+
+```{r}
+lint("setwd('/tmp/x')\nunused_var <- 1")   # a snippet
+lint(file = "analysis.R")                   # a file
+subset(lint(), type == "warning")           # the current project, warnings only
+```
+
+For CI it can also emit the machine-readable formats that
+[jarl](https://jarl.etiennebacher.com) produces, so flowr's findings are
+interchangeable with jarl's:
+
+```{r}
+code <- "setwd('/tmp/x')\nunused_var <- 1"
+lint(code, format = "sarif")                 # SARIF 2.1.0
+cat(lint(code, format = "github"), sep = "\n")  # GitHub Actions annotations
+lint(code, format = "jarl")                  # jarl's native JSON
+```
+
 ## Engines, in one paragraph
 
 `flowr` obtains flowR in several interchangeable ways --- the flowR JS+wasm
@@ -108,7 +145,7 @@ bundle when Node is present, then downloads the binary. To pre-install an engine
 ```{r}
 flowr_install()                  # a self-contained binary into the cache
 flowr_install(engine = "docker") # or pull the flowR docker image
-flowr_installed("all")           # which engines are ready right now?
+flowr_is_installed("all")        # which engines are ready right now?
 ```
 
 See `vignette("flowr-engines")` for choosing and configuring engines, the query

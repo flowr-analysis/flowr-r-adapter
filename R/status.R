@@ -116,8 +116,7 @@
 flowr_log <- function(session = NULL, n = 200L) {
   s <- session %||% .flowr_state$default
   if (is.null(s) || !isTRUE(is_flowr_session(s)) || isTRUE(s$closed)) {
-    stop("no active flowR session; run a command or flowr_connect() first.",
-         call. = FALSE)
+    .flowr_stop("no active flowR session; run a command or flowr_connect() first")
   }
   log <- s$handle$log
   if (is.null(log) || is.na(log) || !file.exists(log)) {
@@ -293,7 +292,11 @@ print.flowr_status <- function(x, ...) {
   row("timeouts", sprintf("connect %ss / request %ss",
                           x$config$connect_timeout, x$config$request_timeout))
   row("cache dir", x$cache_dir)
-  row("config file", if (is.na(x$config_file)) "(none)" else x$config_file)
+  row("config file", if (is.na(x$config_file)) {
+    "none - built-in defaults in effect (see the values above)"
+  } else {
+    x$config_file
+  })
   if (!is.null(x$session) && !is.null(x$session$log) && !is.na(x$session$log)) {
     row("server log", x$session$log)
   }

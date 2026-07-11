@@ -78,7 +78,7 @@
         utils::browseURL(url)               # uses the default handler on Windows
       } else {
         br <- .flowr_browser()
-        if (is.null(br)) stop("no browser found", call. = FALSE)
+        if (is.null(br)) .flowr_stop("no browser found")
         message("Opening your web browser ...")
         utils::browseURL(url, browser = br)
       }

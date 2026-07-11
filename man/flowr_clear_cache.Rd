@@ -15,3 +15,8 @@ flowr_clear_cache(session = NULL)
 \description{
 Clear a session's analysis cache
 }
+\examples{
+\dontrun{
+flowr_clear_cache()              # drop cached analyses for the active session
+}
+}

@@ -4,8 +4,8 @@ skip_no_engine <- function() {
   testthat::skip_on_cran()
   # The bundled engine is real too (runs flowR when Node.js >= 18 is present);
   # only skip when nothing can actually run.
-  if (!flowr_installed("binary") && !flowr_installed("node") &&
-      !flowr_installed("bundled")) {
+  if (!flowr_is_installed("binary") && !flowr_is_installed("node") &&
+      !flowr_is_installed("bundled")) {
     testthat::skip("no flowR engine available (need a binary/node install, or Node.js for the bundle)")
   }
 }

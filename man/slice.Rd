@@ -16,7 +16,9 @@ slice(
 )
 }
 \arguments{
-\item{code}{A string of R source code. Provide this, \code{file} or \code{folder}.}
+\item{code}{A string of R source code. Provide \code{code}, \code{file} or \code{folder};
+with none, the current R project is analysed (see the \emph{Analysing the
+current project} section).}
 
 \item{criterion}{Slicing criteria, a character vector such as \code{"3@x"}
 (line 3, variable \code{x}), \code{"7:3"} (line:column) or \code{"$42"} (a node id).}
@@ -47,6 +49,19 @@ shows a colored git-style diff by default; see \code{\link[=print.flowr_slice]{p
 Computes a program slice for one or more slicing criteria and returns the
 reconstructed, sliced code together with the ids of the included nodes.
 }
+\section{Analysing the current project}{
+
+Every command that takes \code{code}/\code{file}/\code{folder} follows the same rule: pass
+\code{code} (a string), \code{file} (one \code{.R} file) or \code{folder} (analysed recursively),
+and with \strong{none} of them the command analyses the \strong{current R project}.
+flowr walks up from the working directory to the \emph{outermost} project root ---
+a \code{DESCRIPTION} or \code{.Rproj}, else the enclosing git root, else the working
+directory if it holds \code{.R} files --- analyses that project's \code{.R} files, and
+reports the root it chose (unless \code{options(flowr.quiet = TRUE)}). If nothing
+looks like a project, the command errors asking for \code{code}, \code{file} or
+\code{folder}.
+}
+
 \examples{
 \dontrun{
 flowr_install()   # once, to get a flowR engine

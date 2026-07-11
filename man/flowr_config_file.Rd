@@ -12,3 +12,6 @@ The resolved config file path, or \code{NA} when none is found.
 \description{
 Path of the active flowr JSON config file, if any
 }
+\examples{
+flowr_config_file()   # path to the active flowr.json, or NA when none
+}

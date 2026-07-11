@@ -36,6 +36,10 @@ flowr_install <- function(version = flowr_option("flowr_version"),
     }
     if (!.flowr_binary_installed(version)) {
       .flowr_install_binary(version, quiet = quiet)
+    } else if (!quiet) {
+      message("[flowr] flowR ", version, " binary already installed in ",
+              .flowr_binary_dir(version, .flowr_platform()$key),
+              " (use force = TRUE to reinstall)")
     }
   } else if (engine == "docker") {
     if (force || !.flowr_docker_installed(version)) {
@@ -57,12 +61,12 @@ flowr_install <- function(version = flowr_option("flowr_version"),
 #' Reports engine readiness from the engine registry, so it stays correct as
 #' engines are added. Use `"all"` to see every engine at once.
 #'
-#' Note that `flowr_installed("any")` (the default) is `TRUE` whenever *any*
+#' Note that `flowr_is_installed("any")` (the default) is `TRUE` whenever *any*
 #' engine is ready, including the `bundled` flowR that ships inside the package
 #' (which only needs Node.js on your PATH). So it can report `TRUE` even when no
 #' self-contained binary has been downloaded; in that bundled-only case it also
 #' emits a one-line note pointing at [flowr_install()]. Ask specifically with
-#' `flowr_installed("binary")` if you mean the downloaded binary.
+#' `flowr_is_installed("binary")` if you mean the downloaded binary.
 #'
 #' @param engine One engine (`"binary"`, `"bundled"`, `"node"`, `"docker"`),
 #'   `"any"` (is at least one ready?), or `"all"` (a named logical for every
@@ -70,12 +74,14 @@ flowr_install <- function(version = flowr_option("flowr_version"),
 #' @param version flowR version to check.
 #' @return For a single engine or `"any"`, a single `TRUE`/`FALSE`. For `"all"`,
 #'   a named logical vector, one entry per registered engine.
+#' @seealso [flowr_install()], [flowr_status()]
 #' @export
 #' @examples
-#' flowr_installed("binary")
-#' flowr_installed("all")
-flowr_installed <- function(engine = c("any", "all", "binary", "bundled", "node", "docker"),
-                            version = flowr_option("flowr_version")) {
+#' flowr_is_installed("binary")   # is the downloaded binary ready?
+#' flowr_is_installed("all")      # readiness of every engine
+#' flowr_is_installed()           # is any engine ready at all?
+flowr_is_installed <- function(engine = c("any", "all", "binary", "bundled", "node", "docker"),
+                               version = flowr_option("flowr_version")) {
   engine <- match.arg(engine)
   specs <- .flowr_engine_specs()
   ready <- function(nm) isTRUE(tryCatch(specs[[nm]]$ready(version), error = function(e) FALSE))
@@ -90,13 +96,26 @@ flowr_installed <- function(engine = c("any", "all", "binary", "bundled", "node"
     if (isTRUE(vals[["bundled"]]) && !any(vals[others])) {
       .flowr_notify(
         "installed-bundled-only",
-        "flowr_installed(): ready via the bundled engine only (needs Node.js). ",
+        "flowr_is_installed(): ready via the bundled engine only (needs Node.js). ",
         "No downloaded binary is installed; run flowr_install() for one."
       )
     }
     return(any(vals))
   }
   ready(engine)
+}
+
+#' @rdname flowr_is_installed
+#' @description
+#' `flowr_installed()` is a deprecated alias for `flowr_is_installed()`; it still
+#' works but warns, and will be removed in a future release.
+#' @export
+#' @examples
+#' flowr_installed("any")         # deprecated; use flowr_is_installed()
+flowr_installed <- function(engine = c("any", "all", "binary", "bundled", "node", "docker"),
+                            version = flowr_option("flowr_version")) {
+  .Deprecated("flowr_is_installed")
+  flowr_is_installed(engine = engine, version = version)
 }
 
 # The latest published flowR version, from the npm registry; NULL if it cannot
@@ -157,8 +176,7 @@ flowr_update <- function(version = NULL, engine = c("binary", "node", "docker"),
     return(invisible(latest))
   }
   if (!is.character(version) || length(version) != 1L || !nzchar(version)) {
-    stop("`version` must be a single flowR version string, e.g. \"2.12.0\"",
-         call. = FALSE)
+    .flowr_stop("`version` must be a single flowR version string, e.g. \"2.12.0\"")
   }
   flowr_disconnect()                       # drop any session on the old version
   flowr_install(version = version, engine = engine, quiet = quiet)
@@ -174,13 +192,18 @@ flowr_update <- function(version = NULL, engine = c("binary", "node", "docker"),
 #' Removes downloaded binary/node engines from the cache. The docker image is
 #' left in place unless `docker = TRUE` (removing it needs the docker daemon).
 #' The `bundled` engine cannot be removed: flowR's JS+wasm bundle ships inside
-#' the package, so `flowr_installed()` can stay `TRUE` after uninstalling.
+#' the package, so `flowr_is_installed()` can stay `TRUE` after uninstalling.
 #'
 #' @param version A version to remove, or `NULL` to remove the whole cache.
 #' @param docker Also remove the flowR docker image for `version` (best effort).
 #' @param quiet Suppress the summary message.
 #' @return `TRUE`, invisibly.
 #' @export
+#' @examples
+#' \dontrun{
+#' flowr_uninstall()               # remove downloaded engines from the cache
+#' flowr_uninstall(docker = TRUE)  # also remove the pulled docker image
+#' }
 flowr_uninstall <- function(version = NULL, docker = FALSE, quiet = FALSE) {
   if (is.null(version)) {
     unlink(.flowr_cache_dir(), recursive = TRUE)
@@ -215,9 +238,8 @@ flowr_uninstall <- function(version = NULL, docker = FALSE, quiet = FALSE) {
     return(invisible(TRUE))
   }
   if (!.flowr_consent(engine, version)) {
-    stop("flowR engine \"", engine, "\" (", version, ") is not installed.\n",
-         "Run  flowr_install(engine = \"", engine, "\")  to download it.",
-         call. = FALSE)
+    .flowr_stop("flowR engine \"", engine, "\" (", version, ") is not installed.\n",
+         "Run  flowr_install(engine = \"", engine, "\")  to download it.")
   }
   flowr_install(version = version, engine = engine, quiet = quiet)
 }

@@ -16,7 +16,14 @@
 #' @param type `"dataflow"` (default) or `"call-graph"`.
 #' @return A `flowr_graph`: a list of `vertices` and `edges` data frames.
 #' @seealso [flowr_as_igraph()]
+#' @inheritSection slice Analysing the current project
 #' @export
+#' @examples
+#' \dontrun{
+#' g <- flowr_graph("x <- 1\ny <- x + 1")
+#' head(g$vertices)
+#' head(g$edges)
+#' }
 flowr_graph <- function(code = NULL, file = NULL, folder = NULL,
                         type = c("dataflow", "call-graph"), session = NULL) {
   type <- match.arg(type)
@@ -63,10 +70,14 @@ print.flowr_graph <- function(x, ...) {
 #' @param ... Passed to [flowr_graph()] when `x` is not already a graph.
 #' @return An `igraph` object (requires the suggested `igraph` package).
 #' @export
+#' @examples
+#' \dontrun{
+#' ig <- flowr_as_igraph(flowr_graph("x <- 1\ny <- x + 1"))
+#' igraph::vcount(ig)
+#' }
 flowr_as_igraph <- function(x, ...) {
   if (!requireNamespace("igraph", quietly = TRUE)) {
-    stop("flowr_as_igraph() needs the 'igraph' package: install.packages(\"igraph\")",
-         call. = FALSE)
+    .flowr_stop("flowr_as_igraph() needs the 'igraph' package: install.packages(\"igraph\")")
   }
   if (!inherits(x, "flowr_graph")) {
     x <- flowr_graph(x, ...)
@@ -121,6 +132,7 @@ flowr_as_igraph <- function(x, ...) {
 #' @return A `flowr_overview`: the dependency segments (`library`, `source`,
 #'   `read`, `write`, `visualize`, `test`), each item with a `criterion`.
 #' @seealso [slice()], [query()]
+#' @inheritSection slice Analysing the current project
 #' @export
 #' @examples
 #' \dontrun{

@@ -7,7 +7,9 @@
 flowr_overview(code = NULL, file = NULL, folder = NULL, session = NULL)
 }
 \arguments{
-\item{code}{A string of R source code. Provide this, \code{file} or \code{folder}.}
+\item{code}{A string of R source code. Provide \code{code}, \code{file} or \code{folder};
+with none, the current R project is analysed (see the \emph{Analysing the
+current project} section).}
 
 \item{file}{Path to a single R file to analyse.}
 
@@ -28,6 +30,19 @@ run. Every item gains a \code{criterion} field (a flowR node-id criterion) that
 plugs straight into \code{\link[=slice]{slice()}}, so you can slice on any of them, e.g. slice
 backward on all visualizations to see the code each plot depends on.
 }
+\section{Analysing the current project}{
+
+Every command that takes \code{code}/\code{file}/\code{folder} follows the same rule: pass
+\code{code} (a string), \code{file} (one \code{.R} file) or \code{folder} (analysed recursively),
+and with \strong{none} of them the command analyses the \strong{current R project}.
+flowr walks up from the working directory to the \emph{outermost} project root ---
+a \code{DESCRIPTION} or \code{.Rproj}, else the enclosing git root, else the working
+directory if it holds \code{.R} files --- analyses that project's \code{.R} files, and
+reports the root it chose (unless \code{options(flowr.quiet = TRUE)}). If nothing
+looks like a project, the command errors asking for \code{code}, \code{file} or
+\code{folder}.
+}
+
 \examples{
 \dontrun{
 ov <- flowr_overview("plot(1:10)\nhist(rnorm(20))")

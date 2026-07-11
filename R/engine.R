@@ -16,13 +16,13 @@
   sysname <- Sys.info()[["sysname"]]
   os <- switch(sysname,
     Windows = "win", Linux = "linux", Darwin = "darwin",
-    stop("unsupported operating system: ", sysname, call. = FALSE)
+    .flowr_stop("unsupported operating system: ", sysname)
   )
   machine <- Sys.info()[["machine"]]
   arch <- switch(machine,
     "x86-64" = , "x86_64" = , "amd64" = "x64",
     "arm64"  = , "aarch64" = "arm64",
-    stop("unsupported architecture: ", machine, call. = FALSE)
+    .flowr_stop("unsupported architecture: ", machine)
   )
   list(os = os, arch = arch, key = paste0(os, "-", arch),
        exe = if (os == "win") ".exe" else "")
@@ -60,25 +60,30 @@
 
 # Download + integrity-check + extract --------------------------------------
 
-.flowr_download_verify <- function(url, sha256, dest) {
+.flowr_download_verify <- function(url, sha256, dest, quiet = flowr_option("quiet")) {
   ok <- tryCatch({
-    suppressWarnings(utils::download.file(url, dest, mode = "wb",
-                                          quiet = flowr_option("quiet")))
+    # quiet = FALSE lets download.file draw its own progress bar so a large
+    # binary download is visibly making progress rather than appearing to hang.
+    suppressWarnings(utils::download.file(url, dest, mode = "wb", quiet = quiet))
     file.exists(dest) && file.info(dest)$size > 0
   }, error = function(e) FALSE)
   if (!isTRUE(ok)) {
     unlink(dest)
-    stop("could not download the flowR binary from\n  ", url,
+    .flowr_stop("could not download the flowR binary from\n  ", url,
          "\n(the prebuilt binary for this platform/version may not be published ",
          "yet). Use flowr_connect(engine = \"bundled\") or ",
-         "flowr_install(engine = \"node\") instead.", call. = FALSE)
+         "flowr_install(engine = \"node\") instead.")
+  }
+  if (!quiet) {
+    message(sprintf("[flowr]   downloaded %.1f MB; verifying integrity ...",
+                    file.info(dest)$size / 1024^2))
   }
   if (!is.null(sha256)) {
     got <- .flowr_sha256(dest)
     if (!identical(tolower(got), tolower(sha256))) {
       unlink(dest)
-      stop("checksum mismatch for ", url, "\n  expected ", sha256,
-           "\n  got      ", got, call. = FALSE)
+      .flowr_stop("checksum mismatch for ", url, "\n  expected ", sha256,
+           "\n  got      ", got)
     }
   }
   invisible(dest)
@@ -88,9 +93,8 @@
 # downloading a binary, so the core package stays base-R + jsonlite + sys.
 .flowr_sha256 <- function(path) {
   if (!requireNamespace("digest", quietly = TRUE)) {
-    stop("verifying the flowR binary download requires the 'digest' package.\n",
-         "Install it with install.packages(\"digest\"), or use the Node engine.",
-         call. = FALSE)
+    .flowr_stop("verifying the flowR binary download requires the 'digest' package.\n",
+         "Install it with install.packages(\"digest\"), or use the Node engine.")
   }
   tolower(digest::digest(file = path, algo = "sha256"))
 }
@@ -167,9 +171,10 @@
 
 # Verify a downloaded archive's signature against the public key pinned in the
 # package (`inst/flowr-pubkey.pem`). Uses the openssl package, so no gpg
-# installation is required and the check is deterministic. When no key is shipped
-# or openssl is unavailable, the SHA-256 checksum remains the guarantee (in
-# secure mode a missing verifier is an error, not a silent skip).
+# installation is required and the check is deterministic. openssl is an optional
+# (Suggested) dependency: when it is not installed the signature step is skipped
+# and the mandatory SHA-256 checksum (via `digest`, an Imports) remains the
+# integrity guarantee. Install openssl to additionally verify provenance.
 .flowr_verify_signature <- function(archive, sig_url) {
   pub <- system.file("flowr-pubkey.pem", package = "flowr")
   if (!nzchar(pub) || !file.exists(pub)) {
@@ -177,18 +182,18 @@
   }
   if (is.null(sig_url) || !nzchar(sig_url)) {
     if (isTRUE(flowr_option("secure"))) {
-      stop("secure mode: a pinned key is shipped but this download has no ",
-           "signature URL.", call. = FALSE)
+      .flowr_stop("secure mode: a pinned key is shipped but this download has no ",
+           "signature URL.")
     }
     return(invisible(NA))
   }
   if (!requireNamespace("openssl", quietly = TRUE)) {
-    if (isTRUE(flowr_option("secure"))) {
-      stop("secure mode: verifying the binary signature needs the 'openssl' ",
-           "package. install.packages(\"openssl\"), or set ",
-           "options(flowr.verify_signature = FALSE).", call. = FALSE)
-    }
-    message("[flowr] 'openssl' not installed; skipping signature check (SHA-256 verified).")
+    # openssl is optional. Without it we cannot check the signature, but the
+    # SHA-256 checksum (a hard dependency) already guarantees the download
+    # matches the published release, so downgrade gracefully rather than fail.
+    message("[flowr] 'openssl' not installed; skipping signature check ",
+            "(SHA-256 integrity still verified). install.packages(\"openssl\") ",
+            "to also verify the binary's signature.")
     return(invisible(NA))
   }
   sig <- tempfile(fileext = ".sig")
@@ -198,7 +203,7 @@
   }, error = function(e) FALSE)
   if (!isTRUE(ok)) {
     if (isTRUE(flowr_option("secure"))) {
-      stop("secure mode: no signature found at ", sig_url, call. = FALSE)
+      .flowr_stop("secure mode: no signature found at ", sig_url)
     }
     message("[flowr] no signature available; skipping (SHA-256 verified).")
     return(invisible(NA))
@@ -212,8 +217,8 @@
   )
   if (!isTRUE(valid)) {
     unlink(archive)
-    stop("signature verification failed for the downloaded flowR binary ",
-         "(it did not match the pinned key).", call. = FALSE)
+    .flowr_stop("signature verification failed for the downloaded flowR binary ",
+         "(it did not match the pinned key).")
   }
   invisible(TRUE)
 }
@@ -222,19 +227,26 @@
   plat <- .flowr_platform()
   src <- .flowr_binary_source(version, plat$key)
   if (is.null(src$sha256) && isTRUE(flowr_option("secure"))) {
-    stop("no verifiable flowR binary is available for ", plat$key, " / ", version,
+    .flowr_stop("no verifiable flowR binary is available for ", plat$key, " / ", version,
          " (the prebuilt binary may not be published yet).\n",
          "You do not need it: use the shipped bundle instead - ",
          "flowr_connect(engine = \"bundled\") (needs Node, no download). ",
          "Or the Node engine (flowr_install(engine = \"node\")), ",
-         "or set options(flowr.secure = FALSE) to allow an unverified binary.",
-         call. = FALSE)
+         "or set options(flowr.secure = FALSE) to allow an unverified binary.")
   }
   dir <- .flowr_binary_dir(version, plat$key)
   dir.create(dir, recursive = TRUE, showWarnings = FALSE)
   archive <- file.path(dir, basename(src$url))
-  if (!quiet) message("Downloading flowR ", version, " (", plat$key, ") ...")
-  .flowr_download_verify(src$url, src$sha256, archive)
+  if (!quiet) {
+    message("[flowr] downloading flowR ", version, " binary (", plat$key, ")")
+    message("[flowr]   from ", src$url)
+    message("[flowr]   into ", dir)
+    if (is.null(src$sha256)) {
+      message("[flowr]   note: no published checksum for this version/platform ",
+              "(the binary is unverified unless a signature is present)")
+    }
+  }
+  .flowr_download_verify(src$url, src$sha256, archive, quiet = quiet)
   # the hash we verified; digest may be absent (Suggested), so record NA if so
   got <- tryCatch(.flowr_sha256(archive), error = function(e) NA_character_)
   # Signature verification is mandatory in secure mode whenever a public key is
@@ -266,6 +278,11 @@
                      std_out = FALSE, std_err = FALSE),
       error = function(e) NULL
     )
+  }
+  if (!quiet) {
+    how <- switch(level, signature = "signature-verified",
+                  checksum = "checksum-verified", "unverified")
+    message("[flowr] flowR ", version, " binary ready (", how, ") in ", dir)
   }
   dir
 }
@@ -375,7 +392,7 @@
   }
   npm <- .flowr_npm_exe(node)
   if (!nzchar(npm) || !file.exists(npm)) {
-    stop("could not locate npm next to node at ", node, call. = FALSE)
+    .flowr_stop("could not locate npm next to node at ", node)
   }
   dir <- .flowr_node_dir(version)
   dir.create(dir, recursive = TRUE, showWarnings = FALSE)
@@ -388,7 +405,7 @@
     std_out = log, std_err = log
   )
   if (status != 0 || !.flowr_node_installed(version)) {
-    stop("npm install of flowR failed (see ", log, ")", call. = FALSE)
+    .flowr_stop("npm install of flowR failed (see ", log, ")")
   }
   dir
 }
@@ -413,7 +430,7 @@
 # Pull the flowR docker image for `version`.
 .flowr_install_docker <- function(version, quiet = flowr_option("quiet")) {
   if (!nzchar(Sys.which("docker"))) {
-    stop("the docker engine needs the 'docker' command on your PATH.", call. = FALSE)
+    .flowr_stop("the docker engine needs the 'docker' command on your PATH")
   }
   image <- .flowr_docker_image(version)
   if (!quiet) {
@@ -422,7 +439,7 @@
   status <- sys::exec_wait("docker", c("pull", image),
                            std_out = !quiet, std_err = !quiet)
   if (status != 0) {
-    stop("docker pull failed for ", image, call. = FALSE)
+    .flowr_stop("docker pull failed for ", image)
   }
   invisible(TRUE)
 }
@@ -439,7 +456,7 @@
     # r-shell reuses the R already on PATH (we are running inside R).
     flags <- c("--default-engine", "r-shell")
   } else {
-    stop("unknown flowr_engine: ", flowr_engine, call. = FALSE)
+    .flowr_stop("unknown flowr_engine: ", flowr_engine)
   }
   # Always point flowR at the shipped wasm when we have it: the binary still
   # initialises the tree-sitter engine even under r-shell, and without the paths
@@ -506,8 +523,8 @@
       return(p)
     }
   }
-  stop("could not find a bindable free port for the flowR server ",
-       "(are all local ports blocked?)", call. = FALSE)
+  .flowr_stop("could not find a bindable free port for the flowR server ",
+       "(are all local ports blocked?)")
 }
 
 # Wait until a server accepts connections on host:port, or time out.
@@ -524,14 +541,12 @@
       return(invisible(TRUE))
     }
     if (!is.null(pid) && !.flowr_pid_alive(pid)) {
-      stop("flowR server process exited during startup",
-           if (!is.null(log) && file.exists(log)) paste0(":\n", .flowr_tail(log)) else "",
-           call. = FALSE)
+      .flowr_stop("flowR server process exited during startup",
+           if (!is.null(log) && file.exists(log)) paste0(":\n", .flowr_tail(log)) else "")
     }
     if (Sys.time() > deadline) {
-      stop("timed out waiting for the flowR server to start",
-           if (!is.null(log) && file.exists(log)) paste0(":\n", .flowr_tail(log)) else "",
-           call. = FALSE)
+      .flowr_stop("timed out waiting for the flowR server to start",
+           if (!is.null(log) && file.exists(log)) paste0(":\n", .flowr_tail(log)) else "")
     }
     Sys.sleep(0.2)
   }
@@ -581,12 +596,12 @@
       ready = function(v) .flowr_bundled_available() && !is.na(.flowr_node_exe()),
       ensure = function(v, quiet) {
         if (!.flowr_bundled_available()) {
-          stop("the bundled flowR is missing from this installation", call. = FALSE)
+          .flowr_stop("the bundled flowR is missing from this installation")
         }
         if (is.na(.flowr_node_exe())) {
-          stop("the bundled engine needs Node.js on your PATH; none was found.\n",
+          .flowr_stop("the bundled engine needs Node.js on your PATH; none was found.\n",
                "Install Node.js, or use the self-contained binary: ",
-               "flowr_install(engine = \"binary\").", call. = FALSE)
+               "flowr_install(engine = \"binary\").")
         }
       },
       spawn = function(v, fe, port, ws) {
@@ -630,8 +645,7 @@
       ready = function(v) .flowr_docker_installed(v),
       ensure = function(v, quiet) {
         if (!nzchar(Sys.which("docker"))) {
-          stop("the docker engine needs the 'docker' command on your PATH.",
-               call. = FALSE)
+          .flowr_stop("the docker engine needs the 'docker' command on your PATH")
         }
         # `docker run` pulls the image on demand, so presence of docker is enough
       },
@@ -675,14 +689,14 @@
   # Secure-mode invariants (default on). We never build a shell string anywhere
   # (sys::exec_* takes an argv vector), so there is no shell-escape surface.
   if (isTRUE(flowr_option("secure")) && identical(flowr_engine, "r-shell")) {
-    stop("secure mode forbids the r-shell engine (it would hand code to an R ",
+    .flowr_stop("secure mode forbids the r-shell engine (it would hand code to an R ",
          "interpreter). Use flowr_engine = \"tree-sitter\", or set ",
-         "options(flowr.secure = FALSE).", call. = FALSE)
+         "options(flowr.secure = FALSE).")
   }
 
   spec <- .flowr_engine_specs()[[engine]]
   if (is.null(spec)) {
-    stop("unknown flowR engine: ", engine, call. = FALSE)
+    .flowr_stop("unknown flowR engine: ", engine)
   }
   spec$ensure(flowr_version, quiet)
   port <- .flowr_free_port(port)
