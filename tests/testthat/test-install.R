@@ -62,19 +62,6 @@ test_that("a binary download is rejected on a checksum mismatch", {
   )
 })
 
-test_that("signature check is skipped (SHA-256 only) when no key is shipped", {
-  skip_if(nzchar(system.file("flowr-pubkey.pem", package = "flowr")))
-  expect_true(is.na(flowr:::.flowr_verify_signature(tempfile(), "https://example/none.sig")))
-})
-
-test_that("the openssl signing scheme round-trips (as the CI signs)", {
-  skip_if_not_installed("openssl")
-  key <- openssl::ec_keygen()
-  data <- as.raw(rep(0:255, 16))
-  sig <- openssl::signature_create(data, hash = openssl::sha256, key = key)
-  expect_true(openssl::signature_verify(data, sig, hash = openssl::sha256, pubkey = key$pubkey))
-  data[1] <- as.raw(bitwXor(as.integer(data[1]), 1L))
-  expect_false(isTRUE(tryCatch(
-    openssl::signature_verify(data, sig, hash = openssl::sha256, pubkey = key$pubkey),
-    error = function(e) FALSE)))
-})
+# Signature verification (the pinned-key scheme, secure-mode fail-closed
+# behaviour, tamper/wrong-key rejection) is covered in test-signature.R against
+# the actual .flowr_verify_sig / .flowr_verify_signature code.

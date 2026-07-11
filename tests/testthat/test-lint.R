@@ -124,6 +124,7 @@ test_that(".flowr_collect_fixes pulls fixes out of a raw linter result", {
 })
 
 test_that("flowr_lint() end-to-end returns findings when an engine is available", {
+  skip_on_cran()                                   # do not spawn a live engine on CRAN
   skip_if_not(flowr_is_installed("binary") || flowr_is_installed("node") ||
               flowr_is_installed("bundled"),
               "no flowR engine available")
@@ -138,6 +139,7 @@ test_that("flowr_lint() end-to-end returns findings when an engine is available"
 })
 
 test_that("flowr_lint() rules can be selected per call and via config", {
+  skip_on_cran()                                   # do not spawn a live engine on CRAN
   skip_if_not(flowr_is_installed("binary") || flowr_is_installed("node") ||
               flowr_is_installed("bundled"),
               "no flowR engine available")
@@ -156,6 +158,7 @@ test_that("flowr_lint() rules can be selected per call and via config", {
 })
 
 test_that("flowr_lint_fix() applies flowR's real quick fixes end-to-end", {
+  skip_on_cran()                                   # do not spawn a live engine on CRAN
   skip_if_not(flowr_is_installed("binary") || flowr_is_installed("node") ||
               flowr_is_installed("bundled"),
               "no flowR engine available")
