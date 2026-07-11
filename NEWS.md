@@ -1,3 +1,5 @@
+# flowr 0.2.6
+
 # flowr 0.2.5
 
 # flowr 0.2.4
