@@ -10,6 +10,7 @@ flowr_lint(
   folder = NULL,
   session = NULL,
   rules = NULL,
+  full = FALSE,
   format = c("data.frame", "jarl", "sarif", "github")
 )
 }
@@ -32,6 +33,11 @@ uses the active set from \code{options(flowr.lint_rules = )} /
 \code{\link[=flowr_set_config]{flowr_set_config()}}, which itself defaults to flowR's full rule set --- the
 same rules the flowR VS Code extension enables. See the \emph{Linting} section of
 \code{vignette("flowr-engines")} for the rule list and configuration.}
+
+\item{full}{Show every finding when printing. \code{FALSE} (default) prints at
+most \code{getOption("flowr.lint_max")} (10) findings per rule, with the full
+count in \code{(N)} and a \verb{... N more} line; the returned data frame always
+contains all findings regardless.}
 
 \item{format}{Output format: \code{"data.frame"} (default, lintr-compatible),
 \code{"jarl"} (jarl's native JSON), \code{"sarif"} (SARIF 2.1.0), or \code{"github"}

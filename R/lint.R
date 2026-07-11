@@ -176,6 +176,10 @@
 #'   [flowr_set_config()], which itself defaults to flowR's full rule set --- the
 #'   same rules the flowR VS Code extension enables. See the *Linting* section of
 #'   `vignette("flowr-engines")` for the rule list and configuration.
+#' @param full Show every finding when printing. `FALSE` (default) prints at
+#'   most `getOption("flowr.lint_max")` (10) findings per rule, with the full
+#'   count in `(N)` and a `... N more` line; the returned data frame always
+#'   contains all findings regardless.
 #' @param format Output format: `"data.frame"` (default, lintr-compatible),
 #'   `"jarl"` (jarl's native JSON), `"sarif"` (SARIF 2.1.0), or `"github"`
 #'   (GitHub Actions annotation lines).
@@ -202,21 +206,31 @@
 #' cat(flowr_lint(code, format = "github"), sep = "\n")
 #' }
 flowr_lint <- function(code = NULL, file = NULL, folder = NULL, session = NULL,
-                       rules = NULL,
+                       rules = NULL, full = FALSE,
                        format = c("data.frame", "jarl", "sarif", "github")) {
   format <- match.arg(format)
   done <- .flowr_timer("lint"); on.exit(done(), add = TRUE)
-  qobj <- list(type = "linter")
-  active <- rules %||% flowr_option("lint_rules")   # NULL/empty -> flowR's default set
-  if (length(active)) {
-    qobj$rules <- as.list(as.character(active))
+  session <- .flowr_resolve_session(session)
+  # Analyse once (this also resolves + announces the project root), so we can
+  # report flowR's per-phase progress and reuse the cached analysis for a fix.
+  an <- .flowr_input_analysis(code, file, folder, cfg = FALSE, session = session)$an
+  phases <- .flowr_analysis_phases(an$analysis)
+  .flowr_timing_detail(phases)
+  if (!isTRUE(flowr_option("quiet")) && length(phases)) {
+    message("[flowr] ", paste(sprintf("%s %gms", names(phases),
+            as.numeric(unlist(phases))), collapse = ", "), "; running linter ...")
   }
-  res <- query(code = code, file = file, folder = folder,
-               query = qobj, session = session)
-  linter <- res$linter %||% list(results = list())
+  qobj <- list(type = "linter")
+  active <- rules %||% flowr_option("lint_rules")   # empty -> flowR's default set
+  if (length(active)) qobj$rules <- as.list(as.character(active))
+  req <- list(type = "request-query", id = .flowr_session_id(session),
+              filetoken = an$filetoken, query = I(list(qobj)))
+  linter <- .flowr_request(session$con, req)$results$linter %||% list(results = list())
   rows <- .flowr_lint_rows(linter$results %||% list(), code = code, file = file)
   lints <- structure(rows, class = c("flowr_lints", "data.frame"),
-                     raw = linter, source = .flowr_source_label(code, file, folder))
+                     raw = linter, source = .flowr_source_label(code, file, folder),
+                     input = list(code = code, file = file, folder = folder),
+                     full = isTRUE(full))
   if (format == "data.frame") lints else .flowr_lint_render(lints, format)
 }
 
@@ -265,8 +279,11 @@ print.flowr_lints <- function(x, ...) {
                  n, if (n == 1L) "" else "s", where, brk)
   cat(.flowr_ansi(hdr, "1", color), "\n", sep = "")
 
-  # group findings by rule: one rule header (linking to its flowR docs), then
-  # its occurrences beneath it, so repeated warnings collapse instead of flooding.
+  # group findings by rule: one rule header (linking to its flowR docs), then its
+  # occurrences beneath it, so repeated warnings collapse instead of flooding.
+  # Unless full = TRUE, cap each rule at flowr.lint_max rows (the header still
+  # shows the full count) and note how many were hidden.
+  maxper <- if (isTRUE(attr(x, "full"))) Inf else max(1L, as.integer(flowr_option("lint_max")))
   for (rule in unique(x$linter)) {
     idx <- which(x$linter == rule)
     sev <- x$type[idx[1]]
@@ -277,10 +294,15 @@ print.flowr_lints <- function(x, ...) {
     cat(sprintf("  %s %s %s%s\n", tag,
                 .flowr_ansi(label, "1", color),
                 .flowr_ansi(sprintf("(%d)", length(idx)), "90", color), fixnote))
-    for (i in idx) {
+    shown <- if (length(idx) > maxper) idx[seq_len(maxper)] else idx
+    for (i in shown) {
       loc <- .flowr_lint_loc(x$filename[i], x$line_number[i], x$column_number[i], color, link)
       mark <- if (isTRUE(x$fixable[i])) .flowr_ansi(" [fix]", "32", color) else ""
       cat("      ", .flowr_ansi(loc, "90", color), "  ", x$message[i], mark, "\n", sep = "")
+    }
+    if (length(idx) > length(shown)) {
+      cat("      ", .flowr_ansi(sprintf("... %d more (full = TRUE to show all)",
+                                        length(idx) - length(shown)), "90", color), "\n", sep = "")
     }
   }
   if (any(x$fixable)) {
@@ -358,7 +380,12 @@ as.data.frame.flowr_lints <- function(x, ...) {
 #' `preview = TRUE` to get the fixed text without touching disk). When linting a
 #' snippet via `code`, the fixed code is returned as a string.
 #'
+#' Pass a [flowr_lint()] result as `code` to reuse it directly --- no
+#' re-analysis, so applying fixes right after linting is instant.
+#'
 #' @inheritParams flowr_lint
+#' @param code A string of R source, or a [flowr_lint()] result to reuse (see
+#'   *Details*). See [flowr_lint()] for `file`/`folder`/`rules`.
 #' @param preview If `TRUE`, do not write files; return the fixed text instead
 #'   (a character vector named by file).
 #' @return Invisibly: the fixed code string for `code` input; for file/folder
@@ -373,11 +400,22 @@ as.data.frame.flowr_lints <- function(x, ...) {
 #' flowr_lint_fix("x = 1")                       # -> "x <- 1" (returned)
 #' flowr_lint_fix(file = "analysis.R")           # rewrites the file in place
 #' cat(flowr_lint_fix(file = "analysis.R", preview = TRUE))  # dry run
+#'
+#' l <- flowr_lint(file = "analysis.R")          # lint once ...
+#' flowr_lint_fix(l)                              # ... then fix instantly (reused)
 #' }
 flowr_lint_fix <- function(code = NULL, file = NULL, folder = NULL, session = NULL,
                            rules = NULL, preview = FALSE) {
-  lints <- flowr_lint(code = code, file = file, folder = folder,
-                      session = session, rules = rules)
+  # pass a flowr_lint() result as `code` to reuse it (no re-analysis, instant);
+  # otherwise lint the given code/file/folder first.
+  if (inherits(code, "flowr_lints")) {
+    lints <- code
+    inp <- attr(lints, "input") %||% list()
+    code <- inp$code; file <- inp$file; folder <- inp$folder
+  } else {
+    lints <- flowr_lint(code = code, file = file, folder = folder,
+                        session = session, rules = rules)
+  }
   fixes <- .flowr_collect_fixes(attr(lints, "raw")$results %||% list())
   quiet <- isTRUE(flowr_option("quiet"))
   if (length(fixes) == 0L) {

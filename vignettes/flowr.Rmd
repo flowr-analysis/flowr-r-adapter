@@ -144,6 +144,18 @@ flowr_lint_fix(file = "analysis.R")                # rewrites the file in place
 cat(flowr_lint_fix(file = "analysis.R", preview = TRUE))  # dry run, nothing written
 ```
 
+By default the printed report shows at most `getOption("flowr.lint_max")` (10)
+findings per rule --- the header still carries the full `(N)` count and a
+`... N more` line --- so a noisy project stays readable; pass `full = TRUE` for
+everything. And you can fix right after linting without re-analysing by handing
+the result back:
+
+```{r}
+l <- flowr_lint()          # lint the project once
+l                          # inspect (truncated per rule)
+flowr_lint_fix(l)          # apply its quick fixes instantly (reuses l)
+```
+
 ## Engines, in one paragraph
 
 `flowr` obtains flowR in several interchangeable ways --- the flowR JS+wasm

@@ -123,6 +123,22 @@ test_that(".flowr_collect_fixes pulls fixes out of a raw linter result", {
   expect_true(any(vapply(fx, function(f) f$replacement == "fooBar", logical(1))))
 })
 
+test_that("printing truncates to lint_max per rule unless full = TRUE", {
+  withr::local_options(list(flowr.lint_max = 2))
+  mock <- list(`absolute-file-paths` = list(results = lapply(1:5, function(i)
+    list(certainty = "certain", filePath = paste0("/p", i),
+         loc = list(i, 1, i, 5, "a.R")))))
+  rows <- flowr:::.flowr_lint_rows(mock, code = NULL, file = "a.R")
+
+  capped <- structure(rows, class = c("flowr_lints", "data.frame"), full = FALSE)
+  out <- capture.output(print(capped))
+  expect_true(any(grepl("(5)", out, fixed = TRUE)))   # full count kept in header
+  expect_true(any(grepl("3 more", out)))               # 5 findings, 2 shown
+
+  everything <- structure(rows, class = c("flowr_lints", "data.frame"), full = TRUE)
+  expect_false(any(grepl("more", capture.output(print(everything)))))
+})
+
 test_that("flowr_lint() end-to-end returns findings when an engine is available", {
   skip_on_cran()                                   # do not spawn a live engine on CRAN
   skip_if_not(flowr_is_installed("binary") || flowr_is_installed("node") ||
@@ -184,4 +200,16 @@ test_that("flowr_lint_fix() applies flowR's real quick fixes end-to-end", {
   applied <- flowr_lint_fix(file = tf)
   expect_gt(sum(applied), 0)
   expect_false(any(grepl("dead_var", readLines(tf))))
+})
+
+test_that("flowr_lint_fix() reuses a flowr_lint() result (no re-analysis)", {
+  skip_on_cran()
+  skip_if_not(flowr_is_installed("binary") || flowr_is_installed("node") ||
+              flowr_is_installed("bundled"),
+              "no flowR engine available")
+  withr::local_options(list(flowr.quiet = TRUE))
+  l <- flowr_lint("x <- 1\ndead_var <- 2\ncat(x)")
+  fixed <- flowr_lint_fix(l)               # pass the result back to fix directly
+  expect_type(fixed, "character")
+  expect_false(grepl("dead_var", fixed))
 })

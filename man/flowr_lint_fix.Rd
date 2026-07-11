@@ -14,9 +14,8 @@ flowr_lint_fix(
 )
 }
 \arguments{
-\item{code}{A string of R source code. Provide \code{code}, \code{file} or \code{folder};
-with none, the current R project is analysed (see the \emph{Analysing the
-current project} section).}
+\item{code}{A string of R source, or a \code{\link[=flowr_lint]{flowr_lint()}} result to reuse (see
+\emph{Details}). See \code{\link[=flowr_lint]{flowr_lint()}} for \code{file}/\code{folder}/\code{rules}.}
 
 \item{file}{Path to a single R file to analyse.}
 
@@ -50,6 +49,10 @@ quick fixes the flowR VS Code extension offers. When linting \strong{files} or a
 \code{preview = TRUE} to get the fixed text without touching disk). When linting a
 snippet via \code{code}, the fixed code is returned as a string.
 }
+\details{
+Pass a \code{\link[=flowr_lint]{flowr_lint()}} result as \code{code} to reuse it directly --- no
+re-analysis, so applying fixes right after linting is instant.
+}
 \section{Analysing the current project}{
 
 Every command that takes \code{code}/\code{file}/\code{folder} follows the same rule: pass
@@ -68,6 +71,9 @@ looks like a project, the command errors asking for \code{code}, \code{file} or
 flowr_lint_fix("x = 1")                       # -> "x <- 1" (returned)
 flowr_lint_fix(file = "analysis.R")           # rewrites the file in place
 cat(flowr_lint_fix(file = "analysis.R", preview = TRUE))  # dry run
+
+l <- flowr_lint(file = "analysis.R")          # lint once ...
+flowr_lint_fix(l)                              # ... then fix instantly (reused)
 }
 }
 \seealso{

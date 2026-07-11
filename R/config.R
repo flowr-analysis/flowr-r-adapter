@@ -33,8 +33,9 @@
   timing          = FALSE,          # print each command's wall-clock time
   verbose         = FALSE,          # run the flowR server/REPL with --verbose
   quiet           = FALSE,
-  lint_rules      = character(0)    # active flowr_lint() rules; empty = flowR's
+  lint_rules      = character(0),   # active flowr_lint() rules; empty = flowR's
                                     # full default set (as the VS Code extension)
+  lint_max        = 10L             # findings shown per rule unless full = TRUE
 )
 
 # Read a single configuration value, resolving (in order) an explicit `value`,
@@ -152,7 +153,7 @@ flowr_config_file <- function() {
   server  = c("host", "port", "ws", "connect_timeout", "request_timeout",
               "docker_image", "binary_repo"),
   runtime = c("cache_size", "progress", "message_limit", "timing", "verbose",
-              "quiet", "debug", "lint_rules")
+              "quiet", "debug", "lint_rules", "lint_max")
 )
 
 #' Inspect the effective flowr configuration

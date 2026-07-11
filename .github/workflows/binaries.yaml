@@ -42,6 +42,25 @@ jobs:
           [ -n "${{ inputs.release_tag }}"  ] || { echo "::error::release_tag input is empty";  exit 1; }
           echo "building flowR ${{ inputs.flowr_version }} -> release ${{ inputs.release_tag }} (all targets)"
       - uses: actions/checkout@v4
+      # Skip the (expensive) build + upload when this flowR version's binaries
+      # are already published: if flowR did not change, nothing needs rebuilding.
+      # The smoke job still runs and re-verifies the existing assets.
+      - name: Skip build if all binaries already published
+        id: preflight
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          have=$(gh release view "${{ inputs.release_tag }}" --repo "$GITHUB_REPOSITORY" \
+                   --json assets --jq '.assets[].name' 2>/dev/null || true)
+          all=true
+          for t in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win-x64; do
+            echo "$have" | grep -qx "flowr-${{ inputs.flowr_version }}-$t.tar.gz" || all=false
+          done
+          echo "have_all=$all" >> "$GITHUB_OUTPUT"
+          [ "$all" = true ] && echo "flowR ${{ inputs.flowr_version }} binaries already published; skipping build."
+          true
       # bun both installs the npm package and cross-compiles every target, so no
       # separate Node/npm toolchain is needed. (The compiled binary is
       # self-contained; the bundled engine that needs Node lives in the R
@@ -52,11 +71,13 @@ jobs:
       # short of Node's [exe, script, ...args], which broke flowR's argv.slice(2);
       # 1.3.14 aligns Windows with the Node/Unix layout). Pinning keeps that
       # layout deterministic so the binaries' arg handling can't silently regress.
-      - uses: oven-sh/setup-bun@v2
+      - if: steps.preflight.outputs.have_all != 'true'
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
 
       - name: Install flowR (the published npm package)
+        if: steps.preflight.outputs.have_all != 'true'
         shell: bash
         run: |
           # bun add needs a manifest to install into
@@ -66,6 +87,7 @@ jobs:
           bun add "@eagleoutice/flowr@${{ inputs.flowr_version }}" ignore
 
       - name: Cross-compile, package + sign every target
+        if: steps.preflight.outputs.have_all != 'true'
         shell: bash
         env:
           FLOWR_SIGNING_KEY: ${{ secrets.FLOWR_SIGNING_KEY }}
@@ -120,6 +142,7 @@ jobs:
           TARGETS
 
       - name: Upload to the release
+        if: steps.preflight.outputs.have_all != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.release_tag }}

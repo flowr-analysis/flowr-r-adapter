@@ -23,28 +23,6 @@ flowr_lint("setwd('/tmp')\nunused <- 1")
 flowr_lint_fix(file = "analysis.R")
 ```
 
-## Why this design
-
-* **Works out of the box.** The high-level helpers (`slice()`, `query()`,
-  `flowr_overview()`, `dataflow()`, `flowr_repl()`) open a shared
-  session on first use. flowR's JS+wasm **bundle** ships inside the package, so
-  on any machine with Node.js there is nothing to download or install.
-* **Selectable engines.** flowR can be obtained as the shipped **bundle**
-  (Node), a self-contained **binary** (no Node or Docker), a system/private
-  **Node.js**, or **Docker** - chosen via `flowr_connect(engine=)` /
-  `options(flowr.engine=)` / `FLOWR_ENGINE`.
-* **Robust & low-maintenance.** A thin client over flowR's stable server
-  protocol, with real timeouts, buffered message reassembly, streaming and
-  strict resource cleanup. New flowR versions and query types work without
-  updating this package.
-* **Secure by default.** tree-sitter only (untrusted code never reaches an R
-  interpreter), loopback-only server connections, checksum-verified binaries,
-  and no shell invocation anywhere.
-* **Fast.** One warm server is reused across calls; analyses are cached per
-  content, so repeated operations avoid re-spawning and re-analysis.
-* **Small.** Only `digest`, `jsonlite`, `openssl` and `sys` are required
-  (`openssl`/`digest` verify downloaded binaries).
-
 ## Installation
 
 ```r
@@ -82,6 +60,35 @@ Full disclosure of the package's network behaviour:
   deterministic. Missing/incorrect signatures are rejected in secure mode.
 * Downloads are cached under `tools::R_user_dir("flowr", "cache")`.
 * To avoid downloads entirely, use `engine = "bundled"` (Node) or `"docker"`.
+
+> **Verification is not a substitute for trust.** Checksums and the signature
+> prove the binary is *exactly what this project published* and was not tampered
+> with in transit - nothing more. They do **not** vet what flowR (or this
+> adapter) actually does, and running any analysis engine means running its code
+> on your machine. Install and run flowR only if you trust the project, the same
+> as any other software.
+
+## Why this design
+
+* **Works out of the box.** The high-level helpers (`slice()`, `query()`,
+  `flowr_overview()`, `flowr_lint()`, `dataflow()`, `flowr_repl()`) open a shared
+  session on first use. flowR's JS+wasm **bundle** ships inside the package, so
+  on any machine with Node.js there is nothing to download or install.
+* **Selectable engines.** flowR can be obtained as the shipped **bundle**
+  (Node), a self-contained **binary** (no Node or Docker), a system/private
+  **Node.js**, or **Docker** - chosen via `flowr_connect(engine=)` /
+  `options(flowr.engine=)` / `FLOWR_ENGINE`.
+* **Robust & low-maintenance.** A thin client over flowR's stable server
+  protocol, with real timeouts, buffered message reassembly, streaming and
+  strict resource cleanup. New flowR versions and query types work without
+  updating this package.
+* **Secure by default.** tree-sitter only (untrusted code never reaches an R
+  interpreter), loopback-only server connections, and signature/checksum-verified
+  binaries, with no shell invocation anywhere.
+* **Fast.** One warm server is reused across calls; analyses are cached per
+  content, so repeated operations avoid re-spawning and re-analysis.
+* **Small.** Only `digest`, `jsonlite`, `openssl` and `sys` are required
+  (`openssl`/`digest` verify downloaded binaries).
 
 ## AI-assisted development
 

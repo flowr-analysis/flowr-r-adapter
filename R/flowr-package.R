@@ -75,9 +75,12 @@
   # vignettes, so referencing one unconditionally would send users to a
   # "vignette not found". Use `R CMD build` + install the tarball, or
   # devtools::install(build_vignettes = TRUE).
-  has_vig <- isTRUE(tryCatch(
+  # suppressWarnings as well as tryCatch: on an R built against a buggy libdeflate
+  # (the R 4.4.0 R_decompress1 bug), reading the compressed vignette index can
+  # warn; flowr should never add load-time noise of its own.
+  has_vig <- isTRUE(suppressWarnings(tryCatch(
     "flowr" %in% utils::vignette(package = "flowr")$results[, "Item"],
-    error = function(e) FALSE))
+    error = function(e) FALSE)))
   guide <- if (has_vig) "vignette(\"flowr\")" else "?flowr"
   .flowr_notify(
     "startup-banner", startup = TRUE, limit = 1L,
