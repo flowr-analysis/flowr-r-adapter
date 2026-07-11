@@ -460,21 +460,6 @@
   c("--server", if (isTRUE(ws)) "--ws", "--port", as.character(port))
 }
 
-# Windows argv fix for the self-contained binary only.
-#
-# The binary is a `bun build --compile` executable. On Unix, Bun hands the
-# embedded program argv as [exe, exe, ...args] (the program path appears twice);
-# on Windows it hands over one fewer leading entry, [exe, ...args]. flowR's CLI
-# does the conventional argv.slice(2), so on Windows that slice swallows the
-# first real flag ("--server" / "--default-engine") and flowR then reads the
-# next token as a script name -> `error: Script not found "tree-sitter"`.
-# Prepend a throwaway slot that flowR discards (it never reads argv[1]) so the
-# real flags line up again. Only the compiled binary is affected: the bundled
-# engine runs through `node`, which passes argv normally.
-.flowr_binary_argv_guard <- function(args) {
-  if (identical(.flowr_platform()$os, "win")) c("flowr", args) else args
-}
-
 # Spawn + lifecycle -----------------------------------------------------------
 
 .flowr_new_handle <- function(provider, host, port, pid = NULL, owns = FALSE, log = NULL) {
@@ -582,15 +567,13 @@
         dir <- .flowr_binary_dir(v, .flowr_platform()$key)
         exe <- file.path(dir, paste0("flowr", .flowr_platform()$exe))
         list(cmd = exe, host = "127.0.0.1",
-             args = .flowr_binary_argv_guard(
-               c(.flowr_server_flags(port, ws),
-                 .flowr_engine_flags(fe, .flowr_find_wasm(dir)))))
+             args = c(.flowr_server_flags(port, ws),
+                      .flowr_engine_flags(fe, .flowr_find_wasm(dir))))
       },
       console = function(v, fe) {
         dir <- .flowr_binary_dir(v, .flowr_platform()$key)
         list(cmd = file.path(dir, paste0("flowr", .flowr_platform()$exe)),
-             args = .flowr_binary_argv_guard(
-               .flowr_engine_flags(fe, .flowr_find_wasm(dir))))
+             args = .flowr_engine_flags(fe, .flowr_find_wasm(dir)))
       }
     ),
     bundled = list(

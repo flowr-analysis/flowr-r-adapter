@@ -1,8 +1,19 @@
-# Reusable: compile self-contained flowR binaries (per platform), sign them, and
-# upload to `release_tag`. Called by release.yaml and build-flowr-binaries.yaml.
+# Reusable: build self-contained flowR binaries for every platform and upload
+# them to `release_tag`. Called by release.yaml and build-flowr-binaries.yaml.
+#
 # flowR itself is not modified: we compile the published npm CLI with `bun build
 # --compile`, which inlines every module; the two tree-sitter .wasm files ship
 # alongside and are loaded from disk.
+#
+# Two jobs:
+#   build  - a single Linux runner cross-compiles all five targets (Bun's
+#            --target does darwin/windows/arm from x64 Linux), signs them, and
+#            uploads. This keeps the release-producing step off the scarce
+#            macos-13 / windows runners, so a busy runner pool can never stall
+#            the actual publish.
+#   smoke  - a per-platform matrix downloads each *uploaded* asset and boots it
+#            natively, as a post-publish safeguard. If a native runner is
+#            starved it only delays this check; the binaries are already live.
 name: binaries
 
 on:
@@ -20,17 +31,8 @@ permissions:
 
 jobs:
   build:
-    name: ${{ matrix.target }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { os: ubuntu-latest,     target: linux-x64 }
-          - { os: ubuntu-24.04-arm,  target: linux-arm64 }
-          - { os: macos-13,          target: darwin-x64 }
-          - { os: macos-latest,      target: darwin-arm64 }
-          - { os: windows-latest,    target: win-x64 }
+    name: build + upload all targets
+    runs-on: ubuntu-latest
     steps:
       - name: Validate inputs
         shell: bash
@@ -38,12 +40,21 @@ jobs:
           set -euo pipefail
           [ -n "${{ inputs.flowr_version }}" ] || { echo "::error::flowr_version input is empty"; exit 1; }
           [ -n "${{ inputs.release_tag }}"  ] || { echo "::error::release_tag input is empty";  exit 1; }
-          echo "building flowR ${{ inputs.flowr_version }} -> release ${{ inputs.release_tag }} (${{ matrix.target }})"
+          echo "building flowR ${{ inputs.flowr_version }} -> release ${{ inputs.release_tag }} (all targets)"
       - uses: actions/checkout@v4
-      # bun both installs the npm package and compiles the binary, so no separate
-      # Node/npm toolchain is needed. (The compiled binary is self-contained; the
-      # bundled engine that needs Node lives in the R package, not this workflow.)
+      # bun both installs the npm package and cross-compiles every target, so no
+      # separate Node/npm toolchain is needed. (The compiled binary is
+      # self-contained; the bundled engine that needs Node lives in the R
+      # package, not this workflow.)
+      #
+      # Pin the version: the compiled program's argv layout is Bun-version
+      # dependent on Windows (older Bun handed [exe, ...args], a leading entry
+      # short of Node's [exe, script, ...args], which broke flowR's argv.slice(2);
+      # 1.3.14 aligns Windows with the Node/Unix layout). Pinning keeps that
+      # layout deterministic so the binaries' arg handling can't silently regress.
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
 
       - name: Install flowR (the published npm package)
         shell: bash
@@ -54,71 +65,58 @@ jobs:
           # compiling; install it alongside flowR.
           bun add "@eagleoutice/flowr@${{ inputs.flowr_version }}" ignore
 
-      - name: Compile a single self-contained executable
-        shell: bash
-        run: |
-          ext=""
-          [ "${{ matrix.target }}" = "win-x64" ] && ext=".exe"
-          # --bytecode precompiles for faster startup + a smaller binary; it can
-          # error on ESM-only entrypoints in some Bun versions, so fall back.
-          bun build ./node_modules/@eagleoutice/flowr/cli/flowr.js \
-            --compile --minify --sourcemap=none --bytecode --outfile "flowr${ext}" \
-          || bun build ./node_modules/@eagleoutice/flowr/cli/flowr.js \
-            --compile --minify --sourcemap=none --outfile "flowr${ext}"
-
-      # No UPX. The release asset is a .tar.gz, so gzip already handles download
-      # size; UPX would only shrink the on-disk binary, and it self-extracts on
-      # every launch, adding startup latency. It was also the slowest CI step by
-      # far. Ship the binary as bun compiles it.
-
-      # Confirm the binary actually boots flowR (prints the REPL banner) before
-      # packaging, so a broken compile can never be published.
-      - name: Smoke-test the binary
-        shell: bash
-        run: |
-          ext=""; guard=""
-          # On Windows the compiled binary receives one fewer leading argv entry,
-          # so flowR's argv.slice(2) eats the first flag; prepend a throwaway slot
-          # to compensate. This mirrors .flowr_binary_argv_guard() in R/engine.R,
-          # so the smoke test exercises the exact fix the adapter relies on.
-          [ "${{ matrix.target }}" = "win-x64" ] && { ext=".exe"; guard="flowr"; }
-          wr=$(find node_modules -name 'tree-sitter-r.wasm' | head -1)
-          wt=$(find node_modules -name 'tree-sitter.wasm'   | head -1)
-          printf ':quit\n' | "./flowr${ext}" $guard --default-engine tree-sitter \
-            --engine.r-shell.disabled \
-            --engine.tree-sitter.wasm-path "$wr" \
-            --engine.tree-sitter.tree-sitter-wasm-path "$wt" > smoke.log 2>&1 || true
-          if grep -q "flowR repl" smoke.log; then
-            echo "smoke test OK"
-          else
-            echo "SMOKE TEST FAILED - the binary does not run:"; cat smoke.log; exit 1
-          fi
-
-      - name: Package binary + tree-sitter wasm
-        shell: bash
-        run: |
-          mkdir -p dist
-          cp flowr* dist/ 2>/dev/null || true
-          find node_modules -name 'tree-sitter-r.wasm' -exec cp {} dist/ \;
-          find node_modules -name 'tree-sitter.wasm'   -exec cp {} dist/ \;
-          tar -czf "flowr-${{ inputs.flowr_version }}-${{ matrix.target }}.tar.gz" -C dist .
-
-      - name: Checksum + signature
+      - name: Cross-compile, package + sign every target
         shell: bash
         env:
           FLOWR_SIGNING_KEY: ${{ secrets.FLOWR_SIGNING_KEY }}
+          FLOWR_VERSION: ${{ inputs.flowr_version }}
         run: |
-          f="flowr-${{ inputs.flowr_version }}-${{ matrix.target }}.tar.gz"
-          if command -v sha256sum >/dev/null; then sha256sum "$f" > "$f.sha256";
-          else shasum -a 256 "$f" > "$f.sha256"; fi
-          # openssl ECDSA/SHA-256 so the R `openssl` package verifies it, no gpg.
-          if [ -n "$FLOWR_SIGNING_KEY" ]; then
-            printf '%s' "$FLOWR_SIGNING_KEY" > signing_key.pem
-            openssl dgst -sha256 -sign signing_key.pem -out "$f.sig" "$f"
-            rm -f signing_key.pem
-          else
-            echo "No FLOWR_SIGNING_KEY secret; SHA-256 only."
-          fi
+          set -euo pipefail
+          entry=./node_modules/@eagleoutice/flowr/cli/flowr.js
+          # the two tree-sitter wasm blobs are platform-independent; ship them
+          # unchanged next to every binary.
+          # -print -quit: stop at the first match in-process, so no SIGPIPE can
+          # trip `set -o pipefail` (a `find | head` would).
+          wr=$(find node_modules -name 'tree-sitter-r.wasm' -print -quit)
+          wt=$(find node_modules -name 'tree-sitter.wasm'   -print -quit)
+          [ -n "$wr" ] && [ -n "$wt" ] || { echo "::error::tree-sitter wasm not found in node_modules"; exit 1; }
+          mkdir -p out
+          # release target  ->  bun --target triple
+          while read -r target buntarget; do
+            [ -n "$target" ] || continue
+            ext=""; [ "$target" = "win-x64" ] && ext=".exe"
+            echo "::group::compile $target ($buntarget)"
+            rm -rf dist; mkdir -p dist
+            # --bytecode precompiles for faster startup + smaller binaries; it can
+            # error on ESM-only entrypoints in some Bun versions, so fall back.
+            bun build "$entry" --compile --minify --sourcemap=none --bytecode \
+              --target="$buntarget" --outfile "dist/flowr${ext}" \
+            || bun build "$entry" --compile --minify --sourcemap=none \
+              --target="$buntarget" --outfile "dist/flowr${ext}"
+            cp "$wr" "$wt" dist/
+            tgz="flowr-${FLOWR_VERSION}-${target}.tar.gz"
+            tar -czf "out/${tgz}" -C dist .
+            (
+              cd out
+              sha256sum "$tgz" > "${tgz}.sha256"
+              # openssl ECDSA/SHA-256 so the R `openssl` package verifies it, no gpg.
+              if [ -n "${FLOWR_SIGNING_KEY:-}" ]; then
+                printf '%s' "$FLOWR_SIGNING_KEY" > signing_key.pem
+                openssl dgst -sha256 -sign signing_key.pem -out "${tgz}.sig" "$tgz"
+                rm -f signing_key.pem
+              else
+                echo "No FLOWR_SIGNING_KEY secret; SHA-256 only for ${target}."
+              fi
+            )
+            echo "::endgroup::"
+            echo "- \`${tgz}\` built" >> "$GITHUB_STEP_SUMMARY"
+          done <<'TARGETS'
+          linux-x64      bun-linux-x64
+          linux-arm64    bun-linux-arm64
+          darwin-x64     bun-darwin-x64
+          darwin-arm64   bun-darwin-arm64
+          win-x64        bun-windows-x64
+          TARGETS
 
       - name: Upload to the release
         uses: softprops/action-gh-release@v2
@@ -137,8 +135,70 @@ jobs:
             This is an asset store keyed by flowR version, **not** an adapter
             release — see the [latest adapter release](https://github.com/flowr-analysis/flowr-r-adapter/releases/latest)
             for the versioned package.
+          # false, not true: signing is optional (no FLOWR_SIGNING_KEY -> no .sig
+          # files), so the *.sig glob legitimately matches nothing. A genuinely
+          # missing binary is caught downstream — the smoke job's
+          # `gh release download --pattern` errors if its asset is absent.
           fail_on_unmatched_files: false
           files: |
-            flowr-${{ inputs.flowr_version }}-${{ matrix.target }}.tar.gz
-            flowr-${{ inputs.flowr_version }}-${{ matrix.target }}.tar.gz.sha256
-            flowr-${{ inputs.flowr_version }}-${{ matrix.target }}.tar.gz.sig
+            out/*.tar.gz
+            out/*.tar.gz.sha256
+            out/*.tar.gz.sig
+
+  # Post-publish safeguard: pull each uploaded asset and confirm the binary
+  # actually boots flowR (prints the REPL banner) on its native platform. Runs
+  # after the upload, so a broken build is caught and reported loudly even though
+  # the asset is already in place.
+  smoke:
+    name: smoke ${{ matrix.target }}
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,     target: linux-x64 }
+          - { os: ubuntu-24.04-arm,  target: linux-arm64 }
+          - { os: macos-13,          target: darwin-x64 }
+          - { os: macos-latest,      target: darwin-arm64 }
+          - { os: windows-latest,    target: win-x64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Download the uploaded binary for this platform
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          asset="flowr-${{ inputs.flowr_version }}-${{ matrix.target }}.tar.gz"
+          gh release download "${{ inputs.release_tag }}" \
+            --repo "$GITHUB_REPOSITORY" --pattern "$asset" --dir dl
+          mkdir -p run
+          tar -xzf "dl/$asset" -C run
+
+      - name: Smoke-test the uploaded binary
+        shell: bash
+        run: |
+          set -uo pipefail
+          ext=""; [ "${{ matrix.target }}" = "win-x64" ] && ext=".exe"
+          cd run
+          chmod +x "flowr${ext}" 2>/dev/null || true
+          wr=$(find . -name 'tree-sitter-r.wasm' | head -1)
+          wt=$(find . -name 'tree-sitter.wasm'   | head -1)
+          printf ':quit\n' | "./flowr${ext}" --default-engine tree-sitter \
+            --engine.r-shell.disabled \
+            --engine.tree-sitter.wasm-path "$wr" \
+            --engine.tree-sitter.tree-sitter-wasm-path "$wt" > smoke.log 2>&1 || true
+          if grep -q "flowR repl" smoke.log; then
+            echo "✅ **${{ matrix.target }}** — binary boots flowR" >> "$GITHUB_STEP_SUMMARY"
+            echo "smoke OK for ${{ matrix.target }}"
+          else
+            {
+              echo "❌ **${{ matrix.target }}** — binary does NOT boot"
+              echo '```'
+              tail -n 40 smoke.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "SMOKE TEST FAILED for ${{ matrix.target }} - the binary does not run:"
+            cat smoke.log
+            exit 1
+          fi
