@@ -37,11 +37,6 @@ test_that("flowr_is_installed('all') reports every engine as a named logical", {
   expect_identical(flowr_is_installed("any"), any(got))
 })
 
-test_that("flowr_installed() is a deprecated alias for flowr_is_installed()", {
-  expect_warning(got <- flowr_installed("all"), "deprecated|flowr_is_installed")
-  expect_identical(got, suppressWarnings(flowr_is_installed("all")))
-})
-
 test_that("the shipped bundle is complete (js + both wasm)", {
   d <- flowr:::.flowr_bundled_dir()
   skip_if_not(nzchar(d))

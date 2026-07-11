@@ -105,19 +105,6 @@ flowr_is_installed <- function(engine = c("any", "all", "binary", "bundled", "no
   ready(engine)
 }
 
-#' @rdname flowr_is_installed
-#' @description
-#' `flowr_installed()` is a deprecated alias for `flowr_is_installed()`; it still
-#' works but warns, and will be removed in a future release.
-#' @export
-#' @examples
-#' flowr_installed("any")         # deprecated; use flowr_is_installed()
-flowr_installed <- function(engine = c("any", "all", "binary", "bundled", "node", "docker"),
-                            version = flowr_option("flowr_version")) {
-  .Deprecated("flowr_is_installed")
-  flowr_is_installed(engine = engine, version = version)
-}
-
 # The latest published flowR version, from the npm registry; NULL if it cannot
 # be determined (e.g. offline). Used by flowr_update() to check for updates.
 .flowr_latest_version <- function() {

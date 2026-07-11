@@ -2,15 +2,9 @@
 % Please edit documentation in R/install.R
 \name{flowr_is_installed}
 \alias{flowr_is_installed}
-\alias{flowr_installed}
 \title{Is a flowR engine installed?}
 \usage{
 flowr_is_installed(
-  engine = c("any", "all", "binary", "bundled", "node", "docker"),
-  version = flowr_option("flowr_version")
-)
-
-flowr_installed(
   engine = c("any", "all", "binary", "bundled", "node", "docker"),
   version = flowr_option("flowr_version")
 )
@@ -29,9 +23,6 @@ a named logical vector, one entry per registered engine.
 \description{
 Reports engine readiness from the engine registry, so it stays correct as
 engines are added. Use \code{"all"} to see every engine at once.
-
-\code{flowr_installed()} is a deprecated alias for \code{flowr_is_installed()}; it still
-works but warns, and will be removed in a future release.
 }
 \details{
 Note that \code{flowr_is_installed("any")} (the default) is \code{TRUE} whenever \emph{any}
@@ -45,7 +36,6 @@ emits a one-line note pointing at \code{\link[=flowr_install]{flowr_install()}}.
 flowr_is_installed("binary")   # is the downloaded binary ready?
 flowr_is_installed("all")      # readiness of every engine
 flowr_is_installed()           # is any engine ready at all?
-flowr_installed("any")         # deprecated; use flowr_is_installed()
 }
 \seealso{
 \code{\link[=flowr_install]{flowr_install()}}, \code{\link[=flowr_status]{flowr_status()}}
