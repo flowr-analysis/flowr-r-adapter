@@ -1,0 +1,89 @@
+---
+title: "Binary integrity and signature verification"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Binary integrity and signature verification}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+The `binary` engine is a self-contained flowR executable that `flowr` downloads
+from GitHub on demand. Because it is code that will run on your machine, `flowr`
+verifies it before it is ever executed. This vignette explains the two layers of
+verification, what [flowr_status()] reports, and --- if you see *"checksum only
+(no signature)"* --- exactly what to do to turn on signature validation.
+
+## Two layers of protection
+
+1. **SHA-256 checksum (always).** Every download is checked against a published
+   `.sha256` sidecar. This detects corruption and truncation. It uses the
+   `digest` package, which `flowr` depends on, so it is always available.
+2. **Cryptographic signature (optional but recommended).** Release binaries are
+   signed with the project's private key. `flowr` ships the matching **public
+   key** (`inst/flowr-pubkey.pem`) and, when the `openssl` package is installed,
+   verifies the downloaded archive's `.sig` against it. This proves the binary
+   was produced by the flowR release pipeline, not just that it arrived intact.
+
+`flowr` records how strongly each installed binary was verified, and
+[flowr_status()] shows it on the `binary` line:
+
+- `signature-verified` --- checksum **and** signature matched the pinned key.
+- `checksum only (no signature)` --- the checksum matched but the signature step
+  was skipped (see below).
+- `unverified` --- neither could be recorded (an old or hand-placed binary).
+
+## Turning on signature validation
+
+If `flowr_status()` shows *checksum only*, do this:
+
+```{r}
+# 1. install the verifier (openssl is a suggested, not required, dependency)
+install.packages("openssl")
+
+# 2. keep verification on (both are on by default)
+options(flowr.secure = TRUE)          # or flowr_set_config(verify_signature = TRUE)
+
+# 3. re-download the binary so verification runs on a fresh copy
+flowr_install(engine = "binary", force = TRUE)
+
+flowr_status()                        # should now read: signature-verified
+```
+
+The verification level is recorded **at install time**, so simply installing
+`openssl` afterwards does not re-verify a binary that is already on disk --- the
+`force = TRUE` reinstall is what makes `flowr` fetch the `.sig` and check it.
+
+## Why you might see "checksum only"
+
+- **`openssl` is not installed.** It is the verifier; without it the signature
+  step is skipped (in the default *secure* mode a fresh install would instead
+  stop and ask you to install it).
+- **No signature is published** for that flowR version/platform yet, so there is
+  nothing to verify against.
+- **Verification was turned off** with `options(flowr.secure = FALSE)` or
+  `flowr_set_config(verify_signature = FALSE)`.
+
+## Secure mode
+
+`secure` mode is on by default (`options(flowr.secure = TRUE)`). In secure mode a
+binary that cannot be verified is **refused**, not silently downgraded: if a
+public key is pinned but `openssl` is missing, or no signature is available, the
+install stops with an explanation rather than running an unverified executable.
+Turning secure mode off relaxes this to a best-effort checksum, which is why an
+unsigned binary can then install as *checksum only*.
+
+## Not downloading a binary at all
+
+If you would rather not download and verify an executable, use the JS + WebAssembly
+**bundle** that ships inside the package (it needs Node.js but no download):
+
+```{r}
+flowr_connect(engine = "bundled")
+```
+
+See `vignette("flowr-engines")` for the full engine picture, and [flowr_status()]
+/ [flowr_config()] for what is currently in effect.

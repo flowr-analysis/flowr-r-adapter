@@ -147,6 +147,16 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
   NULL
 }
 
+# A short, human label for whatever a command was pointed at, for reports:
+# the file/folder given, "inline code", or "the current project" when none was
+# passed (the command resolves the project root itself, announcing it).
+.flowr_source_label <- function(code, file, folder) {
+  if (!is.null(folder)) folder
+  else if (!is.null(file)) file
+  else if (!is.null(code)) "inline code"
+  else "the current project"
+}
+
 # A short, human label for an auto-selected root ("R package 'x'", "R project").
 .flowr_root_label <- function(root) {
   desc <- file.path(root, "DESCRIPTION")
@@ -462,12 +472,26 @@ dataflow <- function(code = NULL, file = NULL, folder = NULL, session = NULL) {
 inspect_project <- function(code = NULL, file = NULL, folder = NULL,
                             with_dataflow = FALSE, session = NULL) {
   done <- .flowr_timer("inspect_project"); on.exit(done(), add = TRUE)
+  session <- .flowr_resolve_session(session)
+  # resolve the project once (so the auto-selected-root note prints a single
+  # time) and pass it explicitly to both queries, which then share the cached
+  # analysis rather than re-resolving and re-announcing the root.
+  if (is.null(code) && is.null(file) && is.null(folder)) {
+    folder <- .flowr_default_source(code, file, folder)
+  }
   qobj <- list(type = "project", withDf = isTRUE(with_dataflow))
   res <- query(code = code, file = file, folder = folder, query = qobj,
                session = session)$project
+  # dependencies (libraries, sourced files, data read/written, plots) make the
+  # report actually informative; the analysis is cached, so this is cheap.
+  ov <- tryCatch(flowr_overview(code = code, file = file, folder = folder,
+                                session = session),
+                 error = function(e) NULL)
   structure(
     list(files = res$files %||% list(),
          roleCounts = res$roleCounts %||% list(),
+         dependencies = ov,
+         flowr = session$versions$flowr %||% NA_character_,
          raw = res),
     class = "flowr_project"
   )
@@ -476,17 +500,40 @@ inspect_project <- function(code = NULL, file = NULL, folder = NULL,
 #' @export
 print.flowr_project <- function(x, color = .flowr_use_color(), ...) {
   nf <- length(x$files)
-  cat(.flowr_ansi(sprintf("project | %d file%s", nf, if (nf == 1) "" else "s"),
-                  "1", color), "\n", sep = "")
+  head <- sprintf("project | %d file%s", nf, if (nf == 1) "" else "s")
+  if (!is.null(x$flowr) && !is.na(x$flowr)) {
+    head <- paste0(head, "  ", .flowr_ansi(sprintf("(flowR %s)", x$flowr), "90", color))
+  }
+  cat(.flowr_ansi(head, "1", color), "\n", sep = "")
   # roles with a non-zero count, most frequent first
-  roles <- x$roleCounts
-  counts <- vapply(roles, function(v) as.integer(v %||% 0L), integer(1))
+  counts <- vapply(x$roleCounts, function(v) as.integer(v %||% 0L), integer(1))
   counts <- counts[counts > 0]
   if (length(counts) > 0) {
     counts <- counts[order(-counts)]
-    parts <- sprintf("%s %d", names(counts), counts)
-    cat("  ", .flowr_ansi(paste(parts, collapse = "   "), "2", color), "\n", sep = "")
+    cat("  ", .flowr_ansi(paste(sprintf("%s %d", names(counts), counts), collapse = "   "),
+                          "2", color), "\n", sep = "")
   }
+  # dependency summary, from the overview: one line per non-empty category with a
+  # count and the first few names, so the report says what the project *does*.
+  ov <- x$dependencies
+  if (!is.null(ov)) {
+    segs <- Filter(function(s) .flowr_is_dep_segment(ov[[s]]) && length(ov[[s]]) > 0,
+                   names(ov))
+    if (length(segs) > 0) {
+      cat(.flowr_ansi("dependencies", "1", color), "\n", sep = "")
+      for (s in segs) {
+        items <- ov[[s]]
+        nm <- vapply(items, function(it)
+          as.character(it$name %||% it$value %||% it$functionName %||% "?"), character(1))
+        u <- unique(nm)
+        shown <- paste(utils::head(u, 6L), collapse = ", ")
+        if (length(u) > 6L) shown <- paste0(shown, ", ...")
+        cat(sprintf("  %-9s %2d  ", s, length(items)),
+            .flowr_ansi(shown, "90", color), "\n", sep = "")
+      }
+    }
+  }
+  # the analysed files, least prominent (they were the whole report before)
   for (f in x$files) {
     cat("  ", .flowr_ansi(as.character(f), "90", color), "\n", sep = "")
   }
@@ -662,6 +709,10 @@ flowr_console <- function(engine = flowr_option("engine"),
 #'   Defaults to printing [flowr_overview()] of the file. For slicing, pass e.g.
 #'   `function(f) print(slice(file = f, criterion = "5@x"))`.
 #' @param interval Polling interval in seconds.
+#' @param clear Clear the terminal before each refresh so only the latest output
+#'   is shown (like `watch(1)`). `TRUE` by default on an ANSI-capable terminal;
+#'   set `FALSE` to keep every refresh in the scrollback. Ignored where ANSI is
+#'   not available (then refreshes are just separated by a blank line).
 #' @return Does not return normally; runs until interrupted.
 #' @seealso [flowr_console()], [slice()], [flowr_overview()]
 #' @export
@@ -671,7 +722,7 @@ flowr_console <- function(engine = flowr_option("engine"),
 #' flowr_watch("script.R", function(f) print(slice(file = f, criterion = "8@result")))
 #' }
 flowr_watch <- function(file, action = function(f) print(flowr_overview(file = f)),
-                        interval = 0.5) {
+                        interval = 0.5, clear = TRUE) {
   if (!interactive()) {
     .flowr_stop("flowr_watch() needs an interactive session (it loops until interrupted)")
   }
@@ -679,6 +730,9 @@ flowr_watch <- function(file, action = function(f) print(flowr_overview(file = f
     .flowr_stop("`action` must be a function of one argument (the file path)")
   }
   file <- normalizePath(file, mustWork = TRUE)
+  # only emit screen-clearing control codes on a terminal that understands ANSI
+  # (same capability we gate colour on); elsewhere fall back to a blank-line gap.
+  ansi <- isTRUE(clear) && .flowr_use_color()
   message("[flowr] watching ", file, " - press Ctrl-C / Esc to stop ...")
   last <- ""
   repeat {
@@ -686,8 +740,17 @@ flowr_watch <- function(file, action = function(f) print(flowr_overview(file = f
     sig <- if (is.null(info)) "" else paste0(info$mtime, ":", info$size)
     if (!identical(sig, last)) {
       last <- sig
-      cat("\n")
+      if (ansi) {
+        # clear screen + scrollback, cursor home, then a compact header so it is
+        # clear the view is live and which file it tracks.
+        cat("\x1b[2J\x1b[3J\x1b[H")
+        cat(.flowr_ansi(sprintf("[flowr] watching %s  (Ctrl-C to stop)", basename(file)),
+                        "90", TRUE), "\n\n", sep = "")
+      } else {
+        cat("\n")
+      }
       tryCatch(action(file), error = function(e) message("! ", conditionMessage(e)))
+      utils::flush.console()
     }
     Sys.sleep(interval)
   }

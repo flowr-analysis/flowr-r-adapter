@@ -7,7 +7,8 @@
 flowr_watch(
   file,
   action = function(f) print(flowr_overview(file = f)),
-  interval = 0.5
+  interval = 0.5,
+  clear = TRUE
 )
 }
 \arguments{
@@ -18,6 +19,11 @@ Defaults to printing \code{\link[=flowr_overview]{flowr_overview()}} of the file
 \code{function(f) print(slice(file = f, criterion = "5@x"))}.}
 
 \item{interval}{Polling interval in seconds.}
+
+\item{clear}{Clear the terminal before each refresh so only the latest output
+is shown (like \code{watch(1)}). \code{TRUE} by default on an ANSI-capable terminal;
+set \code{FALSE} to keep every refresh in the scrollback. Ignored where ANSI is
+not available (then refreshes are just separated by a blank line).}
 }
 \value{
 Does not return normally; runs until interrupted.

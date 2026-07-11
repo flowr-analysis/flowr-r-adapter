@@ -107,6 +107,33 @@ Supported query types in flowR 2.11.1 include `dependencies`, `dataflow`,
 `linter`, `location-map`, `call-graph` and more. Because `query()` forwards
 whatever you pass, new query types work without updating this package.
 
+## Linting
+
+`flowr_lint()` wraps the `linter` query (see `vignette("flowr")` for the tidy,
+lintr-compatible output and the SARIF/GitHub/jarl formats). By default it runs
+flowR's full rule set --- the same rules the flowR VS Code extension enables ---
+and you can narrow that set, either per call or as a persistent default.
+
+```{r}
+# per call
+flowr_lint("setwd('/x')\nx = 1", rules = c("absolute-file-paths", "naming-convention"))
+
+# as a default for the session (or persist = TRUE for future sessions)
+flowr_set_config(lint_rules = c("absolute-file-paths", "unused-definitions"))
+flowr_lint("setwd('/x')")          # now runs only those two rules
+flowr_set_config(lint_rules = character(0))   # back to flowR's full set
+```
+
+The rules available in flowR 2.11.1 are: `absolute-file-paths`,
+`file-path-validity`, `seeded-randomness`, `deprecated-functions`,
+`network-functions`, `dataframe-access-validation`, `dead-code`, `useless-loop`,
+`problematic-inputs`, `stop-call`, `unused-definitions`, `naming-convention`,
+`roxygen-arguments`, `no-leaked-credentials`, `undefined-symbol`,
+`software-has-license` and `software-has-tests`. Each is documented on the flowR
+wiki (e.g. <https://github.com/flowr-analysis/flowr/wiki/%5BLinting-Rule%5D-Absolute-File-Paths>);
+`flowr_lint()`'s printed report links every rule to its page. Findings marked
+`[fix]` can be applied with `flowr_lint_fix()`.
+
 ## The REPL
 
 ```{r}

@@ -81,6 +81,7 @@
         line          = line_txt,
         linter        = rule,
         certainty     = x$certainty %||% NA_character_,
+        fixable       = length(x$quickFix %||% list()) > 0L,
         stringsAsFactors = FALSE
       )
     }
@@ -89,7 +90,8 @@
     return(data.frame(
       filename = character(0), line_number = integer(0), column_number = integer(0),
       type = character(0), message = character(0), line = character(0),
-      linter = character(0), certainty = character(0), stringsAsFactors = FALSE))
+      linter = character(0), certainty = character(0), fixable = logical(0),
+      stringsAsFactors = FALSE))
   }
   out <- do.call(rbind, rows)
   # deterministic order: by file, then position
@@ -155,8 +157,8 @@
 #' Runs flowR's linter and returns its findings. By default (`format =
 #' "data.frame"`) the result is a tidy data frame with the same column names as
 #' `lintr` (`filename`, `line_number`, `column_number`, `type`, `message`,
-#' `line`, `linter`) plus a flowR-specific `certainty`, so it drops straight into
-#' lintr-based reporting. The other formats emit exactly what
+#' `line`, `linter`) plus flowR-specific `certainty` and `fixable` columns, so it
+#' drops straight into lintr-based reporting. The other formats emit exactly what
 #' [jarl](https://jarl.etiennebacher.com) produces --- its native `"jarl"` JSON,
 #' `"sarif"` (SARIF 2.1.0), or `"github"` Actions annotations --- so flowr's
 #' output is interchangeable with jarl's in CI and editors. flowR's linter covers
@@ -168,6 +170,12 @@
 #' directory's package or `.R` files), like the other flowr commands.
 #'
 #' @inheritParams slice
+#' @param rules Which linter rules to run, as a character vector of rule names
+#'   (e.g. `c("absolute-file-paths", "unused-definitions")`). `NULL` (default)
+#'   uses the active set from `options(flowr.lint_rules = )` /
+#'   [flowr_set_config()], which itself defaults to flowR's full rule set --- the
+#'   same rules the flowR VS Code extension enables. See the *Linting* section of
+#'   `vignette("flowr-engines")` for the rule list and configuration.
 #' @param format Output format: `"data.frame"` (default, lintr-compatible),
 #'   `"jarl"` (jarl's native JSON), `"sarif"` (SARIF 2.1.0), or `"github"`
 #'   (GitHub Actions annotation lines).
@@ -181,23 +189,34 @@
 #' @examples
 #' \dontrun{
 #' code <- "setwd('/tmp/x')\nunused_var <- 1"
-#' lint(code)                       # lintr-compatible data frame
-#' lint()                           # the current project
-#' subset(lint(code), type == "warning")
+#' flowr_lint(code)                 # lintr-compatible data frame
+#' flowr_lint()                     # the current project
+#' subset(flowr_lint(code), type == "warning")
+#'
+#' # pick which rules run (per call, or as a persistent default)
+#' flowr_lint(code, rules = c("absolute-file-paths", "unused-definitions"))
+#' flowr_set_config(lint_rules = c("absolute-file-paths", "seeded-randomness"))
 #'
 #' # jarl-compatible machine-readable output for CI
-#' lint(code, format = "sarif")
-#' cat(lint(code, format = "github"), sep = "\n")
+#' flowr_lint(code, format = "sarif")
+#' cat(flowr_lint(code, format = "github"), sep = "\n")
 #' }
-lint <- function(code = NULL, file = NULL, folder = NULL, session = NULL,
-                 format = c("data.frame", "jarl", "sarif", "github")) {
+flowr_lint <- function(code = NULL, file = NULL, folder = NULL, session = NULL,
+                       rules = NULL,
+                       format = c("data.frame", "jarl", "sarif", "github")) {
   format <- match.arg(format)
   done <- .flowr_timer("lint"); on.exit(done(), add = TRUE)
+  qobj <- list(type = "linter")
+  active <- rules %||% flowr_option("lint_rules")   # NULL/empty -> flowR's default set
+  if (length(active)) {
+    qobj$rules <- as.list(as.character(active))
+  }
   res <- query(code = code, file = file, folder = folder,
-               query = "linter", session = session)
+               query = qobj, session = session)
   linter <- res$linter %||% list(results = list())
   rows <- .flowr_lint_rows(linter$results %||% list(), code = code, file = file)
-  lints <- structure(rows, class = c("flowr_lints", "data.frame"), raw = linter)
+  lints <- structure(rows, class = c("flowr_lints", "data.frame"),
+                     raw = linter, source = .flowr_source_label(code, file, folder))
   if (format == "data.frame") lints else .flowr_lint_render(lints, format)
 }
 
@@ -207,23 +226,66 @@ print.flowr_lints_text <- function(x, ...) {
   invisible(x)
 }
 
+# The flowR wiki page documenting a linter rule. The wiki uses stable, encoded
+# titles: "absolute-file-paths" -> ".../wiki/%5BLinting-Rule%5D-Absolute-File-Paths".
+.flowr_rule_doc_url <- function(rule) {
+  words <- strsplit(rule, "-", fixed = TRUE)[[1]]
+  title <- paste(toupper(substring(words, 1, 1)), substring(words, 2), sep = "", collapse = "-")
+  paste0("https://github.com/flowr-analysis/flowr/wiki/%5BLinting-Rule%5D-", title)
+}
+
+# A clickable file:line:col location (OSC 8 link to the file on capable
+# terminals); left as plain text for inline code or when links are unsupported.
+.flowr_lint_loc <- function(file, line, col, color, link) {
+  loc <- if (is.na(line)) file else sprintf("%s:%s:%s", file, line, col)
+  if (link && !identical(file, "<text>") && file.exists(file)) {
+    url <- paste0("file://", normalizePath(file, mustWork = FALSE))
+    return(.flowr_hyperlink(loc, url, color))
+  }
+  loc
+}
+
 #' @export
 print.flowr_lints <- function(x, ...) {
   color <- .flowr_use_color()
+  link <- color && .flowr_hyperlinks_supported()
   n <- nrow(x)
+  src <- attr(x, "source")
+  where <- if (!is.null(src)) paste0(" in ", src) else ""
   if (n == 0L) {
-    cat(.flowr_ansi("flowr: no lint findings.", "32", color), "\n", sep = "")
+    cat(.flowr_ansi(paste0("flowr: no lint findings", where), "32", color), "\n", sep = "")
     return(invisible(x))
   }
-  hdr <- sprintf("flowr: %d lint finding%s", n, if (n == 1L) "" else "s")
-  cat(.flowr_ansi(hdr, "1", color), "\n", sep = "")
+  # process summary: total + how findings break down by severity.
   tcol <- c(error = "31", warning = "33", style = "36")
-  for (i in seq_len(n)) {
-    where <- if (is.na(x$line_number[i])) x$filename[i]
-             else sprintf("%s:%s:%s", x$filename[i], x$line_number[i], x$column_number[i])
-    tag <- .flowr_ansi(format(x$type[i], width = 7), tcol[[x$type[i]]] %||% "0", color)
-    cat(sprintf("  %s %s  %s ", tag, where, x$message[i]),
-        .flowr_ansi(paste0("[", x$linter[i], "]"), "90", color), "\n", sep = "")
+  ord <- intersect(c("error", "warning", "style"), unique(x$type))
+  brk <- paste(vapply(ord, function(t) paste0(sum(x$type == t), " ", t), character(1)),
+               collapse = ", ")
+  hdr <- sprintf("flowr: %d lint finding%s%s (%s)",
+                 n, if (n == 1L) "" else "s", where, brk)
+  cat(.flowr_ansi(hdr, "1", color), "\n", sep = "")
+
+  # group findings by rule: one rule header (linking to its flowR docs), then
+  # its occurrences beneath it, so repeated warnings collapse instead of flooding.
+  for (rule in unique(x$linter)) {
+    idx <- which(x$linter == rule)
+    sev <- x$type[idx[1]]
+    nfix <- sum(x$fixable[idx])
+    label <- .flowr_hyperlink(rule, .flowr_rule_doc_url(rule), link)
+    tag <- .flowr_ansi(format(sev, width = 7), tcol[[sev]] %||% "0", color)
+    fixnote <- if (nfix > 0) .flowr_ansi(sprintf("  %d fixable", nfix), "32", color) else ""
+    cat(sprintf("  %s %s %s%s\n", tag,
+                .flowr_ansi(label, "1", color),
+                .flowr_ansi(sprintf("(%d)", length(idx)), "90", color), fixnote))
+    for (i in idx) {
+      loc <- .flowr_lint_loc(x$filename[i], x$line_number[i], x$column_number[i], color, link)
+      mark <- if (isTRUE(x$fixable[i])) .flowr_ansi(" [fix]", "32", color) else ""
+      cat("      ", .flowr_ansi(loc, "90", color), "  ", x$message[i], mark, "\n", sep = "")
+    }
+  }
+  if (any(x$fixable)) {
+    cat(.flowr_ansi(sprintf("-> %d fixable; apply with flowr_lint_fix()", sum(x$fixable)),
+                    "90", color), "\n", sep = "")
   }
   invisible(x)
 }
@@ -231,5 +293,133 @@ print.flowr_lints <- function(x, ...) {
 #' @export
 as.data.frame.flowr_lints <- function(x, ...) {
   # a plain data.frame view for lintr-style tooling (drops the S3 subclass)
-  structure(x, class = "data.frame", raw = NULL)
+  structure(x, class = "data.frame", raw = NULL, source = NULL)
+}
+
+# Quick fixes --------------------------------------------------------------
+
+# Pull every quick fix out of a raw `linter` result: a flat list of edits, each
+# with its file (loc[[5]], or NA for inline code), 1-based inclusive char range
+# (sl, sc, el, ec), the replacement text ("" for a removal) and a description.
+.flowr_collect_fixes <- function(results) {
+  out <- list()
+  for (rule in names(results)) {
+    for (x in (results[[rule]]$results %||% list())) {
+      for (qf in (x$quickFix %||% list())) {
+        loc <- qf$loc
+        out[[length(out) + 1L]] <- list(
+          rule = rule,
+          file = if (length(loc) >= 5L) as.character(loc[[5]]) else NA_character_,
+          sl = as.integer(loc[[1]]), sc = as.integer(loc[[2]]),
+          el = as.integer(loc[[3]]), ec = as.integer(loc[[4]]),
+          replacement = qf$replacement %||% "",
+          description = qf$description %||% paste0(rule, " fix"))
+      }
+    }
+  }
+  out
+}
+
+# Apply a set of edits to a single text (one string with '\n' separators).
+# Edits use 1-based inclusive [line,col] ranges; we splice by absolute character
+# offset from the end backwards so earlier offsets stay valid, and skip any edit
+# that overlaps one already applied.
+.flowr_apply_fixes_to_text <- function(text, edits) {
+  lines <- strsplit(text, "\n", fixed = TRUE)[[1]]
+  if (length(lines) == 0L) lines <- ""
+  # Columns are treated as R character counts. This matches flowR for ASCII /
+  # BMP text; a non-BMP character (e.g. an emoji) before a fixed token could
+  # shift the offset if flowR counts columns in UTF-16 code units, so quick-fix
+  # application on such lines is best-effort.
+  prefix <- c(0L, cumsum(nchar(lines) + 1L))   # chars before each 1-based line
+  idx <- function(line, col) prefix[line] + col
+  spans <- lapply(edits, function(e) list(
+    start = idx(e$sl, e$sc), end = idx(e$el, e$ec), rep = e$replacement))
+  spans <- spans[order(vapply(spans, function(s) s$start, 0), decreasing = TRUE)]
+  s <- text
+  guard <- Inf
+  applied <- 0L
+  for (sp in spans) {
+    if (sp$end >= guard) next                  # overlaps a later edit; skip
+    if (identical(substr(s, sp$start, sp$end), sp$rep)) next  # no-op fix; ignore
+    s <- paste0(substr(s, 1L, sp$start - 1L), sp$rep, substr(s, sp$end + 1L, nchar(s)))
+    guard <- sp$start
+    applied <- applied + 1L
+  }
+  list(text = s, applied = applied)
+}
+
+#' Apply flowR's linter quick fixes
+#'
+#' Applies the automatic fixes flowR attaches to some findings (currently
+#' absolute file paths, unused definitions and naming conventions) --- the same
+#' quick fixes the flowR VS Code extension offers. When linting **files** or a
+#' **folder**, the fixes are written back to those files in place (use
+#' `preview = TRUE` to get the fixed text without touching disk). When linting a
+#' snippet via `code`, the fixed code is returned as a string.
+#'
+#' @inheritParams flowr_lint
+#' @param preview If `TRUE`, do not write files; return the fixed text instead
+#'   (a character vector named by file).
+#' @return Invisibly: the fixed code string for `code` input; for file/folder
+#'   input, a named integer of fixes applied per file, or --- when
+#'   `preview = TRUE` --- the fixed text of each file. Findings without a quick
+#'   fix are left untouched.
+#' @seealso [flowr_lint()]
+#' @inheritSection slice Analysing the current project
+#' @export
+#' @examples
+#' \dontrun{
+#' flowr_lint_fix("x = 1")                       # -> "x <- 1" (returned)
+#' flowr_lint_fix(file = "analysis.R")           # rewrites the file in place
+#' cat(flowr_lint_fix(file = "analysis.R", preview = TRUE))  # dry run
+#' }
+flowr_lint_fix <- function(code = NULL, file = NULL, folder = NULL, session = NULL,
+                           rules = NULL, preview = FALSE) {
+  lints <- flowr_lint(code = code, file = file, folder = folder,
+                      session = session, rules = rules)
+  fixes <- .flowr_collect_fixes(attr(lints, "raw")$results %||% list())
+  quiet <- isTRUE(flowr_option("quiet"))
+  if (length(fixes) == 0L) {
+    if (!quiet) message("[flowr] no quick fixes available for these findings")
+    return(invisible(if (!is.null(code)) code else character(0)))
+  }
+  # inline code: no file to write, so return the fixed source
+  if (!is.null(code) && is.null(file) && is.null(folder)) {
+    res <- .flowr_apply_fixes_to_text(code, fixes)
+    if (!isTRUE(flowr_option("quiet"))) {
+      message("[flowr] applied ", res$applied, " quick fix",
+              if (res$applied == 1L) "" else "es", " to the supplied code")
+    }
+    return(res$text)
+  }
+  # file/folder: group edits by their file and rewrite each in place
+  withfile <- Filter(function(f) !is.na(f$file) && nzchar(f$file), fixes)
+  if (length(withfile) == 0L) {
+    if (!quiet) message("[flowr] fixes are available but carry no file location to write to")
+    return(invisible(stats::setNames(integer(0), character(0))))
+  }
+  byfile <- split(withfile, vapply(withfile, function(f) f$file, character(1)))
+  applied <- integer(0)
+  previews <- character(0)
+  for (path in names(byfile)) {
+    # read the exact bytes (readLines + paste would drop a trailing newline) and
+    # write back with cat (writeLines would add one), so files that had no final
+    # newline are not gratuitously changed outside the fixed region.
+    orig <- readChar(path, file.info(path)$size, useBytes = FALSE)
+    res <- .flowr_apply_fixes_to_text(orig, byfile[[path]])
+    if (isTRUE(preview)) {
+      previews[[path]] <- res$text
+    } else {
+      cat(res$text, file = path)
+    }
+    applied[[path]] <- res$applied
+  }
+  if (!quiet) {
+    verb <- if (isTRUE(preview)) "would apply" else "applied"
+    message("[flowr] ", verb, " ", sum(applied), " quick fix",
+            if (sum(applied) == 1L) "" else "es", " across ", length(applied), " file(s)")
+  }
+  # preview returns the fixed text (per file); a real run returns the counts.
+  if (isTRUE(preview)) invisible(previews) else invisible(applied)
 }

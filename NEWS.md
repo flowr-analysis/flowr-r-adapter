@@ -2,6 +2,17 @@
 
 # flowr 0.2.4
 
+* New `flowr_lint()` runs flowR's linter and returns findings as a
+  lintr-compatible data frame; `format = "sarif"`/`"github"`/`"jarl"` emit the
+  machine-readable outputs that jarl produces. `flowr_lint_fix()` applies flowR's
+  quick fixes (in place, or returning corrected code for a snippet).
+* `flowr_installed()` is renamed to `flowr_is_installed()` (no alias is kept).
+* `inspect_project()` now also reports the flowR version and a dependency
+  summary, not just the analysed files.
+* New `vignette("flowr-security")` explains binary integrity and how to turn on
+  signature verification; `flowr_status()` points there when a binary is
+  checksum-verified only.
+
 # flowr 0.2.3
 
 # flowr 0.2.2
@@ -36,7 +47,7 @@ flowR client. flowR itself is unchanged; this package wraps it.
   (flowR's JS+wasm shipped in the package, runs on your Node, no download),
   `binary` (self-contained native executable), `node` and `docker`. `auto`
   prefers a cached binary, then the bundle, then the binary.
-* `flowr_install()`, `flowr_installed("all")`, `flowr_uninstall()` and
+* `flowr_install()`, `flowr_is_installed("all")`, `flowr_uninstall()` and
   `flowr_update()` (which also checks for a newer flowR) manage engines.
 * `flowr_console()` hands the terminal to flowR's native REPL (history and tab
   completion); `flowr_console(r_access = TRUE)` also runs R via the r-shell

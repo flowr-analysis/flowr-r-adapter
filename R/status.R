@@ -275,6 +275,16 @@ print.flowr_status <- function(x, ...) {
     if (!is.na(x$binary_hash)) {
       row("sha256", .flowr_ansi(x$binary_hash, "90", color))
     }
+    # tell the user how to upgrade to signature verification when it is not on
+    if (x$binary_verification %in% c("checksum", "none")) {
+      hint <- if (!requireNamespace("openssl", quietly = TRUE)) {
+        "to verify signatures: install.packages(\"openssl\"), then flowr_install(engine = \"binary\", force = TRUE)"
+      } else {
+        "to verify signatures: options(flowr.secure = TRUE); flowr_install(engine = \"binary\", force = TRUE)"
+      }
+      row("", .flowr_ansi(hint, "90", color))
+      row("", .flowr_ansi("see vignette(\"flowr-security\")", "90", color))
+    }
   }
 
   rule("flowR")

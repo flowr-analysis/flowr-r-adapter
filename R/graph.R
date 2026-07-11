@@ -211,9 +211,15 @@ print.flowr_overview <- function(x, color = .flowr_use_color(), ...) {
     }
     label <- if (nzchar(tag)) paste0(name, " ", tag_out) else name
     ln <- if (is.null(it$line) || is.na(it$line)) "" else sprintf("line %-4s", it$line)
+    # "via <fn>" only when the calling function adds information: skip it when
+    # there is no function name, or when it is already the label shown (e.g. a
+    # `geom_errorbar` item called via `geom_errorbar`). Keep the column width so
+    # the criterion stays aligned across rows.
+    fn <- it$functionName %||% ""
+    show_via <- nzchar(fn) && !identical(fn, it$name %||% it$value %||% it$functionName %||% "")
+    via <- .flowr_ansi(if (show_via) sprintf("via %-12s", fn) else strrep(" ", 16L), "2", color)
     # link the function to its definition only if flowR gave us the location
-    via <- .flowr_ansi(sprintf("via %-12s", it$functionName %||% ""), "2", color)
-    if (!is.null(it$definitionUrl) && nzchar(it$definitionUrl)) {
+    if (show_via && !is.null(it$definitionUrl) && nzchar(it$definitionUrl)) {
       via <- .flowr_hyperlink(via, it$definitionUrl, color)
     }
     cat("  ", label, strrep(" ", max(1L, 30L - visible)), " ",

@@ -108,7 +108,7 @@ accept `code`, `file` or `folder`; with none, they analyse the enclosing project
 
 ## Lint
 
-`lint()` runs flowR's linter and returns the findings as a tidy data frame whose
+`flowr_lint()` runs flowR's linter and returns the findings as a tidy data frame whose
 columns match those of the [lintr](https://lintr.r-lib.org/) package
 (`filename`, `line_number`, `column_number`, `type`, `message`, `line`,
 `linter`), so it drops straight into lintr-based reporting or CI. flowR flags
@@ -117,9 +117,9 @@ deprecated or network functions, unseeded randomness, dead code and possible
 leaked credentials.
 
 ```{r}
-lint("setwd('/tmp/x')\nunused_var <- 1")   # a snippet
-lint(file = "analysis.R")                   # a file
-subset(lint(), type == "warning")           # the current project, warnings only
+flowr_lint("setwd('/tmp/x')\nunused_var <- 1")   # a snippet
+flowr_lint(file = "analysis.R")                   # a file
+subset(flowr_lint(), type == "warning")           # the current project, warnings only
 ```
 
 For CI it can also emit the machine-readable formats that
@@ -128,9 +128,20 @@ interchangeable with jarl's:
 
 ```{r}
 code <- "setwd('/tmp/x')\nunused_var <- 1"
-lint(code, format = "sarif")                 # SARIF 2.1.0
-cat(lint(code, format = "github"), sep = "\n")  # GitHub Actions annotations
-lint(code, format = "jarl")                  # jarl's native JSON
+flowr_lint(code, format = "sarif")                 # SARIF 2.1.0
+cat(flowr_lint(code, format = "github"), sep = "\n")  # GitHub Actions annotations
+flowr_lint(code, format = "jarl")                  # jarl's native JSON
+```
+
+Findings that flowR can fix automatically are marked `[fix]` in the printed
+report. `flowr_lint_fix()` applies those quick fixes (the same ones flowR's VS
+Code extension offers): it rewrites the files in place, or returns the corrected
+code for a snippet.
+
+```{r}
+flowr_lint_fix("unused_var <- 1")                  # -> "" (removes the unused def)
+flowr_lint_fix(file = "analysis.R")                # rewrites the file in place
+cat(flowr_lint_fix(file = "analysis.R", preview = TRUE))  # dry run, nothing written
 ```
 
 ## Engines, in one paragraph

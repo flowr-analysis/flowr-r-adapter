@@ -19,6 +19,13 @@
 # Holds the lazily created default session and the id counter.
 .flowr_state <- new.env(parent = emptyenv())
 
+.onLoad <- function(libname, pkgname) {
+  # Stop every spawned flowR server when R exits, not only on a namespace
+  # unload: a finalizer on the session-lived state env with onexit = TRUE runs
+  # during shutdown, so quitting R can never leave an orphaned server process.
+  reg.finalizer(.flowr_state, function(e) .flowr_kill_all_engines(), onexit = TRUE)
+}
+
 # Emit a transient, informational message at most `flowr.message_limit` times
 # per R session, keyed by `id`. The counter lives in `.flowr_state`, so it is
 # session-only and resets in a fresh session (no state is written to disk). It

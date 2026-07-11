@@ -170,31 +170,36 @@
 }
 
 # Verify a downloaded archive's signature against the public key pinned in the
-# package (`inst/flowr-pubkey.pem`). Uses the openssl package, so no gpg
-# installation is required and the check is deterministic. openssl is an optional
-# (Suggested) dependency: when it is not installed the signature step is skipped
-# and the mandatory SHA-256 checksum (via `digest`, an Imports) remains the
-# integrity guarantee. Install openssl to additionally verify provenance.
+# package (`inst/flowr-pubkey.pem`), using the required `openssl` package (so no
+# gpg is needed and the check is deterministic). The mandatory SHA-256 checksum
+# (via `digest`) guards integrity; the signature additionally proves provenance
+# against the pinned key.
 .flowr_verify_signature <- function(archive, sig_url) {
+  # Secure mode makes signature verification MANDATORY: every branch that cannot
+  # complete the check fails closed instead of downgrading to checksum-only, so a
+  # stripped signature, a missing verifier, or a removed key can never silently
+  # weaken trust. Outside secure mode the same situations degrade -- with a
+  # warning, never silently -- to the checksum-only guarantee.
+  refuse <- function(reason, hint = NULL) {
+    if (isTRUE(flowr_option("secure"))) {
+      .flowr_stop("secure mode requires a verified signature, but ", reason, ".",
+           if (!is.null(hint)) paste0(" ", hint) else "",
+           " Or set options(flowr.secure = FALSE) to allow a checksum-only install.")
+    }
+    .flowr_warn(reason, "; installing with checksum-only verification (no ",
+                "signature). Set options(flowr.secure = TRUE) to require signatures.")
+    invisible(NA)
+  }
   pub <- system.file("flowr-pubkey.pem", package = "flowr")
   if (!nzchar(pub) || !file.exists(pub)) {
-    return(invisible(NA))                      # no pinned key -> rely on SHA-256
+    return(refuse("no pinned public key is shipped to verify the binary against"))
   }
   if (is.null(sig_url) || !nzchar(sig_url)) {
-    if (isTRUE(flowr_option("secure"))) {
-      .flowr_stop("secure mode: a pinned key is shipped but this download has no ",
-           "signature URL.")
-    }
-    return(invisible(NA))
+    return(refuse("this download provides no signature"))
   }
   if (!requireNamespace("openssl", quietly = TRUE)) {
-    # openssl is optional. Without it we cannot check the signature, but the
-    # SHA-256 checksum (a hard dependency) already guarantees the download
-    # matches the published release, so downgrade gracefully rather than fail.
-    message("[flowr] 'openssl' not installed; skipping signature check ",
-            "(SHA-256 integrity still verified). install.packages(\"openssl\") ",
-            "to also verify the binary's signature.")
-    return(invisible(NA))
+    return(refuse("the 'openssl' package needed to check signatures is not installed",
+                  "Run install.packages(\"openssl\")."))
   }
   sig <- tempfile(fileext = ".sig")
   ok <- tryCatch({
@@ -202,29 +207,40 @@
     file.exists(sig) && file.info(sig)$size > 0
   }, error = function(e) FALSE)
   if (!isTRUE(ok)) {
-    if (isTRUE(flowr_option("secure"))) {
-      .flowr_stop("secure mode: no signature found at ", sig_url)
-    }
-    message("[flowr] no signature available; skipping (SHA-256 verified).")
-    return(invisible(NA))
+    return(refuse(paste0("no signature was found at ", sig_url)))
   }
-  key <- openssl::read_pubkey(pub)
   sig_raw <- readBin(sig, "raw", n = file.info(sig)$size)
   data <- readBin(archive, "raw", n = file.info(archive)$size)
-  valid <- tryCatch(
-    openssl::signature_verify(data, sig_raw, hash = openssl::sha256, pubkey = key),
-    error = function(e) FALSE
-  )
-  if (!isTRUE(valid)) {
-    unlink(archive)
+  if (!.flowr_verify_sig(data, sig_raw, pub)) {
+    unlink(archive)                              # never keep a binary that failed
     .flowr_stop("signature verification failed for the downloaded flowR binary ",
          "(it did not match the pinned key).")
   }
   invisible(TRUE)
 }
 
+# The crypto core, split out so it can be unit-tested against a freshly generated
+# key: does `sig_raw` sign `data` under public key `pub` (a PEM path or an
+# openssl pubkey)? Pins the scheme to ECDSA/RSA over SHA-256 -- matching the
+# release command `openssl dgst -sha256 -sign` -- and treats any error (bad key,
+# wrong algorithm, garbage signature) as "not verified" rather than a crash.
+.flowr_verify_sig <- function(data, sig_raw, pub) {
+  key <- if (is.character(pub)) openssl::read_pubkey(pub) else pub
+  isTRUE(tryCatch(
+    openssl::signature_verify(data, sig_raw, hash = openssl::sha256, pubkey = key),
+    error = function(e) FALSE))
+}
+
 .flowr_install_binary <- function(version, quiet = flowr_option("quiet")) {
   plat <- .flowr_platform()
+  # running with the hardened defaults off is a security-relevant choice; warn
+  # loudly (not just once) so it is never accidental when downloading + running
+  # a native binary.
+  if (!isTRUE(flowr_option("secure"))) {
+    .flowr_warn("installing the flowR binary with secure mode OFF ",
+                "(options(flowr.secure = FALSE)): reduced download verification. ",
+                "Re-enable with options(flowr.secure = TRUE).")
+  }
   src <- .flowr_binary_source(version, plat$key)
   if (is.null(src$sha256) && isTRUE(flowr_option("secure"))) {
     .flowr_stop("no verifiable flowR binary is available for ", plat$key, " / ", version,
@@ -249,11 +265,11 @@
   .flowr_download_verify(src$url, src$sha256, archive, quiet = quiet)
   # the hash we verified; digest may be absent (Suggested), so record NA if so
   got <- tryCatch(.flowr_sha256(archive), error = function(e) NA_character_)
-  # Signature verification is mandatory in secure mode whenever a public key is
-  # pinned, so it cannot be silently turned off with verify_signature = FALSE.
-  pinned <- nzchar(system.file("flowr-pubkey.pem", package = "flowr"))
+  # Signature verification is mandatory in secure mode, so it cannot be turned
+  # off with verify_signature = FALSE; .flowr_verify_signature() then fails closed
+  # if anything (key, verifier, signature) is missing.
   sig <- NA
-  if (isTRUE(flowr_option("verify_signature")) || (isTRUE(flowr_option("secure")) && pinned)) {
+  if (isTRUE(flowr_option("verify_signature")) || isTRUE(flowr_option("secure"))) {
     sig <- .flowr_verify_signature(archive, src$sig)   # TRUE = matched, NA = skipped
   }
   # record how strongly this binary was verified, and the hash, for flowr_status()
@@ -765,12 +781,18 @@
   invisible(TRUE)
 }
 
-# Kill anything we spawned when the package is unloaded.
-.onUnload <- function(libpath) {
+# Best-effort: kill every flowR server process we spawned. Shared by the
+# namespace-unload hook and the at-R-exit finalizer (see .onLoad), so nothing we
+# started is ever orphaned - whether the package is unloaded or R simply quits.
+.flowr_kill_all_engines <- function() {
   reg <- .flowr_state$engines
-  if (!is.null(reg)) {
-    for (key in ls(reg)) {
-      tryCatch(tools::pskill(reg[[key]]$pid), error = function(e) NULL)
-    }
+  if (is.null(reg)) {
+    return(invisible(FALSE))
   }
+  for (key in ls(reg)) {
+    tryCatch(tools::pskill(reg[[key]]$pid), error = function(e) NULL)
+  }
+  invisible(TRUE)
 }
+
+.onUnload <- function(libpath) .flowr_kill_all_engines()

@@ -6,7 +6,8 @@
 `flowr` is a robust R client for
 [flowR](https://github.com/flowr-analysis/flowr), a static dataflow analyzer and
 program slicer for the R language. It lets you slice R scripts, extract their
-dependencies, run flowR's query API and drive its REPL - directly from R.
+dependencies, lint them, run flowR's query API and drive its REPL - directly
+from R.
 
 ```r
 library(flowr)
@@ -15,6 +16,11 @@ code <- "x <- 1\ny <- 2\nz <- x + 5\nprint(z)"
 cat(slice(code, "4@z")$code)
 #> x <- 1
 #> z <- x + 5
+
+# lint (lintr-compatible columns; also SARIF / GitHub / jarl output),
+# and apply flowR's quick fixes:
+flowr_lint("setwd('/tmp')\nunused <- 1")
+flowr_lint_fix(file = "analysis.R")
 ```
 
 ## Why this design
@@ -36,16 +42,21 @@ cat(slice(code, "4@z")$code)
   and no shell invocation anywhere.
 * **Fast.** One warm server is reused across calls; analyses are cached per
   content, so repeated operations avoid re-spawning and re-analysis.
-* **Small.** Only `jsonlite` and `sys` are required.
+* **Small.** Only `digest`, `jsonlite`, `openssl` and `sys` are required
+  (`openssl`/`digest` verify downloaded binaries).
 
 ## Installation
 
 ```r
 # install.packages("remotes")
-remotes::install_github("flowr-analysis/flowr-r-adapter")
+remotes::install_github("flowr-analysis/flowr-r-adapter", build_vignettes = TRUE)
 ```
 
-Installing from GitHub ships flowR's JS + wasm **bundle** (~2.5 MB) inside the
+`build_vignettes = TRUE` is needed to get the vignettes (`remotes` skips them by
+default); without it, `vignette("flowr")` is not installed and the startup
+banner points at `?flowr` instead.
+
+Installing from GitHub ships flowR's JS + wasm **bundle** inside the
 package, so `slice()` works out of the box on any platform that has Node.js, with
 no download. For a Node-free setup, fetch the self-contained native binary once:
 
@@ -83,9 +94,11 @@ report anything amiss via `flowr::flowr_bug_report()`.
 
 ## Documentation
 
-* `vignette("flowr")` - getting started.
+* `vignette("flowr")` - getting started (slicing, overview, linting).
 * `vignette("flowr-engines")` - engines, the query API, the REPL, secure mode
   and performance.
+* `vignette("flowr-security")` - binary integrity and how to turn on signature
+  verification.
 
 ## Development
 
