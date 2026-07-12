@@ -5,15 +5,21 @@
 # --compile`, which inlines every module; the two tree-sitter .wasm files ship
 # alongside and are loaded from disk.
 #
-# Two jobs:
-#   build  - a single Linux runner cross-compiles all five targets (Bun's
-#            --target does darwin/windows/arm from x64 Linux), signs them, and
-#            uploads. This keeps the release-producing step off the scarce
-#            macos-13 / windows runners, so a busy runner pool can never stall
-#            the actual publish.
-#   smoke  - a per-platform matrix downloads each *uploaded* asset and boots it
-#            natively, as a post-publish safeguard. If a native runner is
-#            starved it only delays this check; the binaries are already live.
+# Three jobs:
+#   build     - a single Linux runner cross-compiles the four non-Windows
+#               targets (Bun's --target does darwin/linux-arm from x64 Linux),
+#               signs them, and uploads. Keeping these off the scarce macos-13
+#               runners means a busy pool can never stall the actual publish.
+#   build-win - win-x64 is built natively on windows-latest instead of being
+#               cross-compiled. Cross-compiling the Windows standalone .exe from
+#               Linux segfaults at launch (a Bun bug in the compiled runtime:
+#               first with --bytecode, then again after it was removed), so this
+#               target must be produced on a real Windows host. It `needs: build`
+#               so the release already exists when it uploads and the two
+#               action-gh-release calls can't race to create it.
+#   smoke     - a per-platform matrix downloads each *uploaded* asset and boots
+#               it natively, as a post-publish safeguard. If a native runner is
+#               starved it only delays this check; the binaries are already live.
 name: binaries
 
 on:
@@ -25,6 +31,14 @@ on:
       release_tag:
         required: true
         type: string
+      # Rebuild and overwrite even if this flowR version's binaries are already
+      # published. Needed to replace a bad asset (e.g. a segfaulting win-x64)
+      # without bumping the flowR version. Off by default so automated releases
+      # keep skipping already-published binaries.
+      force_rebuild:
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -50,21 +64,41 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force_rebuild }}
         run: |
           set -euo pipefail
+          targets="linux-x64 linux-arm64 darwin-x64 darwin-arm64"
           have=$(gh release view "${{ inputs.release_tag }}" --repo "$GITHUB_REPOSITORY" \
                    --json assets --jq '.assets[].name' 2>/dev/null || true)
-          all=true
-          for t in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win-x64; do
-            echo "$have" | grep -qx "flowr-${{ inputs.flowr_version }}-$t.tar.gz" || all=false
-          done
-          echo "have_all=$all" >> "$GITHUB_OUTPUT"
-          [ "$all" = true ] && echo "flowR ${{ inputs.flowr_version }} binaries already published; skipping build."
+          if [ "$FORCE" = "true" ]; then
+            # Force: always rebuild, and delete any stale assets first so the
+            # re-upload is a clean replace (belt-and-suspenders — the upload step
+            # also overwrites same-named assets). Only delete what exists so a
+            # missing .sig/.sha256 can't fail the step.
+            for t in $targets; do
+              for f in "flowr-${{ inputs.flowr_version }}-$t.tar.gz" \
+                       "flowr-${{ inputs.flowr_version }}-$t.tar.gz.sha256" \
+                       "flowr-${{ inputs.flowr_version }}-$t.tar.gz.sig"; do
+                echo "$have" | grep -qx "$f" && \
+                  gh release delete-asset "${{ inputs.release_tag }}" "$f" \
+                    --repo "$GITHUB_REPOSITORY" --yes || true
+              done
+            done
+            echo "have_all=false" >> "$GITHUB_OUTPUT"
+            echo "force_rebuild set; rebuilding all non-Windows targets."
+          else
+            all=true
+            for t in $targets; do
+              echo "$have" | grep -qx "flowr-${{ inputs.flowr_version }}-$t.tar.gz" || all=false
+            done
+            echo "have_all=$all" >> "$GITHUB_OUTPUT"
+            [ "$all" = true ] && echo "flowR ${{ inputs.flowr_version }} binaries already published; skipping build."
+          fi
           true
-      # bun both installs the npm package and cross-compiles every target, so no
-      # separate Node/npm toolchain is needed. (The compiled binary is
-      # self-contained; the bundled engine that needs Node lives in the R
-      # package, not this workflow.)
+      # bun both installs the npm package and cross-compiles the four
+      # non-Windows targets, so no separate Node/npm toolchain is needed. (The
+      # compiled binary is self-contained; the bundled engine that needs Node
+      # lives in the R package, not this workflow.)
       #
       # Pin the version: the compiled program's argv layout is Bun-version
       # dependent on Windows (older Bun handed [exe, ...args], a leading entry
@@ -110,10 +144,10 @@ jobs:
             echo "::group::compile $target ($buntarget)"
             rm -rf dist; mkdir -p dist
             # No --bytecode: it embeds JSC bytecode built for the *host*, which a
-            # cross-compiled target loads and segfaults on at launch (the Windows
-            # binary crashed with exactly this before the flag was removed). Since
-            # every target here is cross-compiled from Linux, plain JS bundling is
-            # the only portable choice; startup is marginally slower, but correct.
+            # cross-compiled target loads and segfaults on at launch when run on
+            # its native OS (Bun issue #18416). Every target in this job is
+            # cross-compiled from Linux, so plain JS bundling is the only portable
+            # choice; startup is marginally slower, but correct.
             bun build "$entry" --compile --minify --sourcemap=none \
               --target="$buntarget" --outfile "dist/flowr${ext}"
             cp "$wr" "$wt" dist/
@@ -138,7 +172,6 @@ jobs:
           linux-arm64    bun-linux-arm64
           darwin-x64     bun-darwin-x64
           darwin-arm64   bun-darwin-arm64
-          win-x64        bun-windows-x64
           TARGETS
 
       - name: Upload to the release
@@ -169,6 +202,110 @@ jobs:
             out/*.tar.gz.sha256
             out/*.tar.gz.sig
 
+  # win-x64 is built natively here instead of being cross-compiled in `build`.
+  # Cross-compiling the Windows standalone .exe from Linux segfaults at launch (a
+  # Bun bug in the compiled runtime — first with --bytecode, then again after it
+  # was removed), so this one target must be produced on a real Windows host.
+  # `needs: build` serializes the two uploads: by the time this runs the release
+  # already exists, so the two action-gh-release calls can't race to create it.
+  build-win:
+    name: build + upload win-x64 (native)
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Same per-target skip as `build` (and same force_rebuild override).
+      - name: Skip build if win-x64 already published
+        id: preflight
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force_rebuild }}
+        run: |
+          set -euo pipefail
+          have=$(gh release view "${{ inputs.release_tag }}" --repo "$GITHUB_REPOSITORY" \
+                   --json assets --jq '.assets[].name' 2>/dev/null || true)
+          if [ "$FORCE" = "true" ]; then
+            # Force: always rebuild, deleting any stale win-x64 assets first.
+            for f in "flowr-${{ inputs.flowr_version }}-win-x64.tar.gz" \
+                     "flowr-${{ inputs.flowr_version }}-win-x64.tar.gz.sha256" \
+                     "flowr-${{ inputs.flowr_version }}-win-x64.tar.gz.sig"; do
+              echo "$have" | grep -qx "$f" && \
+                gh release delete-asset "${{ inputs.release_tag }}" "$f" \
+                  --repo "$GITHUB_REPOSITORY" --yes || true
+            done
+            echo "have=false" >> "$GITHUB_OUTPUT"
+            echo "force_rebuild set; rebuilding win-x64."
+          elif echo "$have" | grep -qx "flowr-${{ inputs.flowr_version }}-win-x64.tar.gz"; then
+            echo "have=true" >> "$GITHUB_OUTPUT"
+            echo "flowR ${{ inputs.flowr_version }} win-x64 binary already published; skipping build."
+          else
+            echo "have=false" >> "$GITHUB_OUTPUT"
+          fi
+      # Same pinned Bun as `build` (1.3.14): it is the version whose Windows argv
+      # layout matches Node/Unix ([exe, script, ...args]), which flowR's
+      # argv.slice(2) relies on. Building natively keeps that runtime unchanged.
+      - if: steps.preflight.outputs.have != 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install flowR (the published npm package)
+        if: steps.preflight.outputs.have != 'true'
+        shell: bash
+        run: |
+          # bun add needs a manifest to install into; `ignore` is a peer import
+          # of flowR's CLI that bun must resolve when compiling.
+          printf '{}\n' > package.json
+          bun add "@eagleoutice/flowr@${{ inputs.flowr_version }}" ignore
+
+      - name: Compile, package + sign win-x64 (native)
+        if: steps.preflight.outputs.have != 'true'
+        shell: bash
+        env:
+          FLOWR_SIGNING_KEY: ${{ secrets.FLOWR_SIGNING_KEY }}
+          FLOWR_VERSION: ${{ inputs.flowr_version }}
+        run: |
+          set -euo pipefail
+          entry=./node_modules/@eagleoutice/flowr/cli/flowr.js
+          wr=$(find node_modules -name 'tree-sitter-r.wasm' -print -quit)
+          wt=$(find node_modules -name 'tree-sitter.wasm'   -print -quit)
+          [ -n "$wr" ] && [ -n "$wt" ] || { echo "::error::tree-sitter wasm not found in node_modules"; exit 1; }
+          mkdir -p out dist
+          # Native Windows build: same flags as the cross targets, but the real
+          # Windows toolchain produces the runtime, so no cross-compile segfault.
+          # No --bytecode (kept off for parity); plain minified JS bundle.
+          bun build "$entry" --compile --minify --sourcemap=none \
+            --target=bun-windows-x64 --outfile dist/flowr.exe
+          cp "$wr" "$wt" dist/
+          tgz="flowr-${FLOWR_VERSION}-win-x64.tar.gz"
+          tar -czf "out/${tgz}" -C dist .
+          (
+            cd out
+            sha256sum "$tgz" > "${tgz}.sha256"
+            if [ -n "${FLOWR_SIGNING_KEY:-}" ]; then
+              printf '%s' "$FLOWR_SIGNING_KEY" > signing_key.pem
+              openssl dgst -sha256 -sign signing_key.pem -out "${tgz}.sig" "$tgz"
+              rm -f signing_key.pem
+            else
+              echo "No FLOWR_SIGNING_KEY secret; SHA-256 only for win-x64."
+            fi
+          )
+          echo "- \`${tgz}\` built (native windows)" >> "$GITHUB_STEP_SUMMARY"
+
+      # Adds win-x64 assets to the release created by `build`. No name/body/
+      # make_latest here so this upload can't clobber that release's metadata.
+      - name: Upload to the release
+        if: steps.preflight.outputs.have != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          fail_on_unmatched_files: false
+          files: |
+            out/*.tar.gz
+            out/*.tar.gz.sha256
+            out/*.tar.gz.sig
+
   # Post-publish safeguard: pull each uploaded asset and check it. Two modes:
   #   boot    - run the binary natively and require flowR's REPL banner. Used for
   #             every target that has a GitHub-hosted runner able to execute it.
@@ -183,7 +320,7 @@ jobs:
   #             `file` validates) differs for darwin.
   smoke:
     name: smoke ${{ matrix.target }}
-    needs: build
+    needs: [build, build-win]
     strategy:
       fail-fast: false
       matrix:

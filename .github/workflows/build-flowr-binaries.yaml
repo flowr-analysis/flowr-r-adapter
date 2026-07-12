@@ -9,6 +9,11 @@ on:
         description: "flowR version to build"
         required: true
         default: "2.11.1"
+      force_rebuild:
+        description: "Rebuild and overwrite binaries even if already published"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -54,4 +59,5 @@ jobs:
     with:
       flowr_version: ${{ inputs.version }}
       release_tag: flowr-v${{ inputs.version }}
+      force_rebuild: ${{ inputs.force_rebuild }}
     secrets: inherit
