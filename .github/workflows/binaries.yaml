@@ -5,11 +5,15 @@
 # --compile`, which inlines every module; the two tree-sitter .wasm files ship
 # alongside and are loaded from disk.
 #
-# Three jobs:
+# Four jobs:
 #   build     - a single Linux runner cross-compiles the four non-Windows
 #               targets (Bun's --target does darwin/linux-arm from x64 Linux),
 #               signs them, and uploads. Keeping these off the scarce macos-13
 #               runners means a busy pool can never stall the actual publish.
+#   sigdb     - the signature database, built once as ONE platform-independent
+#               signed asset shared by every target and engine (it is data, not
+#               code), so it is not duplicated into all five binaries and can be
+#               re-cut on its own when the database changes but flowR does not.
 #   build-win - win-x64 is built natively on windows-latest instead of being
 #               cross-compiled. Cross-compiling the Windows standalone .exe from
 #               Linux segfaults at launch (a Bun bug in the compiled runtime:
@@ -295,6 +299,104 @@ jobs:
 
       # Adds win-x64 assets to the release created by `build`. No name/body/
       # make_latest here so this upload can't clobber that release's metadata.
+      - name: Upload to the release
+        if: steps.preflight.outputs.have != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          fail_on_unmatched_files: false
+          files: |
+            out/*.tar.gz
+            out/*.tar.gz.sha256
+            out/*.tar.gz.sig
+
+  # The signature database, as platform-independent signed assets shared by every
+  # target and every engine (binary/bundled/node) -- it is data, like the wasm
+  # blobs, so there is nothing per-platform about it. Publishing it beside the
+  # binaries (rather than inside all five) keeps it out of every binary and lets
+  # it be re-cut on its own when the database changes but flowR does not.
+  #
+  # tools/pack-sigdb.sh does the work and is the same script `make sigdb` runs,
+  # so what ships is exactly what a maintainer can build and inspect locally. It
+  # takes what to pack from the pointer flowR itself commits, verifies every
+  # shard against that pointer's hashes, and boots a real flowR against each
+  # finished archive -- a database that does not mount is never published.
+  #
+  # Three non-redundant sets are published (`base`, `current`, `history`); the R
+  # side downloads whichever the user selected (`flowr.sigdb`) and mounts them
+  # together.
+  #
+  # `needs: build` for the same reason as build-win: the release exists by then,
+  # so no two uploads race to create it.
+  sigdb:
+    name: build + upload the shared sigdb
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skip build if the sigdb is already published
+        id: preflight
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force_rebuild }}
+        run: |
+          set -euo pipefail
+          have=$(gh release view "${{ inputs.release_tag }}" --repo "$GITHUB_REPOSITORY" \
+                   --json assets --jq '.assets[].name' 2>/dev/null || true)
+          all=true
+          for s in base current history; do
+            asset="flowr-sigdb-$s-${{ inputs.flowr_version }}.tar.gz"
+            if [ "$FORCE" = "true" ]; then
+              for f in "$asset" "$asset.sha256" "$asset.sig"; do
+                echo "$have" | grep -qx "$f" && \
+                  gh release delete-asset "${{ inputs.release_tag }}" "$f" \
+                    --repo "$GITHUB_REPOSITORY" --yes || true
+              done
+              all=false
+            else
+              echo "$have" | grep -qx "$asset" || all=false
+            fi
+          done
+          if [ "$all" = true ]; then
+            echo "have=true" >> "$GITHUB_OUTPUT"
+            echo "sigdb for flowR ${{ inputs.flowr_version }} already published; skipping."
+          else
+            echo "have=false" >> "$GITHUB_OUTPUT"
+          fi
+      # node runs the mount check the pack script performs on every archive
+      - if: steps.preflight.outputs.have != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Pack the sigdb (verifying it mounts)
+        if: steps.preflight.outputs.have != 'true'
+        shell: bash
+        run: tools/pack-sigdb.sh "${{ inputs.flowr_version }}" out
+
+      - name: Sign
+        if: steps.preflight.outputs.have != 'true'
+        shell: bash
+        env:
+          FLOWR_SIGNING_KEY: ${{ secrets.FLOWR_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          cd out
+          if [ -z "${FLOWR_SIGNING_KEY:-}" ]; then
+            echo "No FLOWR_SIGNING_KEY secret; SHA-256 only for the sigdb."
+          else
+            printf '%s' "$FLOWR_SIGNING_KEY" > signing_key.pem
+            for tgz in *.tar.gz; do
+              openssl dgst -sha256 -sign signing_key.pem -out "${tgz}.sig" "$tgz"
+            done
+            rm -f signing_key.pem
+          fi
+          for tgz in *.tar.gz; do
+            echo "- \`${tgz}\` built ($(du -h "$tgz" | cut -f1), shared by all platforms)" \
+              >> "$GITHUB_STEP_SUMMARY"
+          done
+
       - name: Upload to the release
         if: steps.preflight.outputs.have != 'true'
         uses: softprops/action-gh-release@v2

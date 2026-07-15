@@ -222,6 +222,8 @@ flowr_status <- function() {
       binary_verification = .flowr_binary_verification(fv),
       binary_installed_at = .flowr_binary_mtime(fv),
       binary_hash = .flowr_binary_hash(fv),
+      sigdb_scopes = .flowr_sigdb_scopes_installed(fv),
+      sigdb_verification = .flowr_sigdb_verification(fv),
       session = active,
       backend = backend
     ),
@@ -285,6 +287,20 @@ print.flowr_status <- function(x, ...) {
       row("", .flowr_ansi(hint, "90", color))
       row("", .flowr_ansi("see vignette(\"flowr-security\")", "90", color))
     }
+  }
+  # the signature database is optional: say which sets are there and how to get
+  # them, rather than leaving "no sigdb" to surprise the user in flowR's own banner
+  if (length(x$sigdb_scopes) > 0L) {
+    sv <- switch(x$sigdb_verification %||% "none",
+      signature = list("signature-verified", "32"),
+      checksum  = list("checksum only (no signature)", "33"),
+      list("unverified", "31"))
+    row("sigdb", .flowr_ansi(paste0(paste(x$sigdb_scopes, collapse = " + "),
+                                    ", ", sv[[1]]), sv[[2]], color))
+  } else {
+    row("sigdb", .flowr_ansi("not installed", "33", color))
+    row("", .flowr_ansi(paste0("library()/:: exports are not resolved; ",
+                               "get it with flowr_install()"), "90", color))
   }
 
   rule("flowR")

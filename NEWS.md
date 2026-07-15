@@ -1,3 +1,36 @@
+# flowr (development version)
+
+* Targets flowR 2.12.3 (from 2.11.1); the shipped `inst/flowr-js` bundle is
+  rebuilt accordingly.
+* `flowr_install()` now also obtains flowR's signature database, so `library()`
+  and `::` exports (base R plus CRAN) resolve instead of flowR reporting
+  `no sigdb`. The new `sigdb` argument selects which sets to fetch --- `"base"`
+  (~1 MB), `"current"` (~24 MB, the default), `"history"` (~35 MB), `"all"` or
+  `"none"` --- and defaults to the new `flowr.sigdb` option, so
+  `options(flowr.sigdb = "none")` turns it off. The sets are non-redundant and
+  mount together.
+  The database is platform-independent, shared by every engine, and published
+  beside the binaries with the same verification (checksum, plus a signature
+  against the pinned key --- mandatory in secure mode). It is obtained
+  independently of the engine, so an installed engine is left alone and
+  `flowr_install(sigdb = "history")` just adds that set. Failing to obtain it
+  warns rather than failing the install, and nothing is downloaded unless you
+  ask: an analysis never fetches it. `flowr_status()` reports which sets are
+  present and how they were verified.
+* `flowr_uninstall()` gains `engine` and `sigdb` arguments mirroring
+  `flowr_install()`, so you can select what to remove instead of clearing
+  everything: `flowr_uninstall(engine = "none", sigdb = "history")` drops one
+  database set, `flowr_uninstall(sigdb = "none")` removes only the engines. The
+  default still removes everything, and `version = NULL` now applies the
+  selection across every cached version.
+* `slice()` gains two flowR 2.12 options. `include_callees = TRUE` continues a
+  backward slice past a function-definition boundary, also pulling in the
+  definition's binding and call sites (flowR ignores it for forward slices, so
+  `slice()` warns instead of quietly returning an unchanged slice).
+  `inline_sources = TRUE` inlines resolvable `source()` calls so the slice is a
+  single self-contained script; calls that are cyclic or unresolvable are kept
+  verbatim and reported in the new `inline_warnings` element.
+
 # flowr 0.2.7
 
 # flowr 0.2.6

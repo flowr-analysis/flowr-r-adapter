@@ -1,6 +1,8 @@
 {
   "schema": 1,
   "comment": "Maps (flowR version, platform) to a downloadable self-contained binary archive and its SHA-256 checksum. Populated by the build-binaries GitHub Actions workflow; the download is checksum-verified before the binary is ever executed. An empty `binaries` list simply means no prebuilt binary is available yet, in which case the Node or built-in engine is used.",
-  "default_version": "2.11.1",
-  "binaries": []
+  "sigdb_comment": "Maps a flowR version to its signature database archive. The database is data, not code, so one archive serves every platform and engine; it is verified like a binary and mounted via $FLOWR_SIGDB_DIR. An empty `sigdb` list means the release naming convention is used instead.",
+  "default_version": "2.12.3",
+  "binaries": [],
+  "sigdb": []
 }

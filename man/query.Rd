@@ -39,7 +39,7 @@ character vector of query type names (e.g. \code{"dependencies"}), a single quer
 object (a named list with a \code{type}), or a list of such objects.
 }
 \details{
-Supported query types in flowR 2.11.1 include \code{dependencies},
+Supported query types in flowR 2.12.3 include \code{dependencies},
 \code{call-context}, \code{dataflow}, \code{df-shape}, \code{static-slice}, \code{id-map},
 \code{normalized-ast}, \code{linter}, \code{location-map}, \code{call-graph}, and more. Pass
 extra arguments by using the object form, e.g.

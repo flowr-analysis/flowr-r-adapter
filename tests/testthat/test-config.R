@@ -3,7 +3,7 @@
 test_that("option resolution follows arg > option > env > default", {
   withr::local_options(list(flowr.flowr_version = NULL))
   withr::local_envvar(c(FLOWR_FLOWR_VERSION = NA))
-  expect_identical(flowr:::flowr_option("flowr_version"), "2.11.1") # default
+  expect_identical(flowr:::flowr_option("flowr_version"), "2.12.3") # default
 
   withr::local_envvar(c(FLOWR_FLOWR_VERSION = "9.9.9"))
   expect_identical(flowr:::flowr_option("flowr_version"), "9.9.9")  # env beats default
@@ -91,4 +91,34 @@ test_that("nested timers report only once (outermost wins)", {
   inner <- flowr:::.flowr_timer("inner")   # reentrant: a no-op
   expect_silent(inner())
   expect_message(outer(), "outer")
+})
+
+# flowR 2.12 slicing knobs ----------------------------------------------------
+
+test_that(".flowr_flag accepts only a single non-NA logical", {
+  expect_true(flowr:::.flowr_flag(TRUE, "x"))
+  expect_false(flowr:::.flowr_flag(FALSE, "x"))
+  expect_error(flowr:::.flowr_flag("yes", "include_callees"), "include_callees")
+  expect_error(flowr:::.flowr_flag(NA, "x"), "TRUE or FALSE")
+  expect_error(flowr:::.flowr_flag(c(TRUE, TRUE), "x"), "TRUE or FALSE")
+})
+
+test_that(".flowr_inline_warnings always yields the same columns", {
+  cols <- c("kind", "id", "path")
+  empty <- flowr:::.flowr_inline_warnings(NULL)
+  expect_s3_class(empty, "data.frame")
+  expect_identical(names(empty), cols)
+  expect_identical(nrow(empty), 0L)
+  expect_identical(names(flowr:::.flowr_inline_warnings(list())), cols)
+
+  # `path` is optional in flowR's payload: an unresolved source() may omit it
+  got <- flowr:::.flowr_inline_warnings(list(
+    list(kind = "cycle", callId = "3", path = "a.R"),
+    list(kind = "unresolved", callId = "9")
+  ))
+  expect_identical(nrow(got), 2L)
+  expect_identical(names(got), cols)
+  expect_identical(got$kind, c("cycle", "unresolved"))
+  expect_identical(got$id, c("3", "9"))
+  expect_identical(got$path, c("a.R", NA_character_))
 })

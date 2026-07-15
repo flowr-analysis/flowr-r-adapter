@@ -4,7 +4,12 @@
 
 R := Rscript --no-init-file
 
-.PHONY: help sync document test check hooks install reinstall reinstall_signed clean
+.PHONY: help sync document test check hooks install reinstall reinstall_signed clean \
+        sigdb binaries
+
+# flowR version the release artefacts are built for; defaults to the package's
+# own target so `make sigdb` needs no arguments. Override: make sigdb V=2.12.0
+V := $(shell sed -n -E 's/.*flowr_version[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/p' R/config.R | head -1)
 
 # Run R with the rv-locked library on the search path (see tools/with-rvlib.sh).
 WITH_RVLIB := tools/with-rvlib.sh
@@ -19,6 +24,8 @@ help:
 	@echo "  install   document, then (re)install the package locally"
 	@echo "  reinstall build a tarball and install it (with vignettes; no doc regen)"
 	@echo "  reinstall_signed  sign the cached binary and reinstall to verify it"
+	@echo "  sigdb     pack the signature-database release assets into out/ (V=<version>)"
+	@echo "  binaries  compile the flowR binary for this machine into out/ (V=<version>)"
 	@echo "  clean     remove build artefacts"
 
 sync:
@@ -60,6 +67,19 @@ reinstall_signed: document
 	$(R) -e 'library(flowr); flowr_install(engine="binary", force=TRUE, quiet=TRUE); print(flowr_status()); stopifnot(identical(flowr:::.flowr_binary_verification(), "signature"))'
 	mv inst/flowr-manifest.json.orig inst/flowr-manifest.json
 
+# Build the release artefacts locally, with the same scripts the binaries
+# workflow runs -- so what you can inspect here is what CI publishes. Both drop
+# `<name>.tar.gz` + `.sha256` into out/; CI additionally signs them.
+#   make sigdb                 # all three sets (base, current, history)
+#   make sigdb SCOPES=current  # just one
+sigdb:
+	tools/pack-sigdb.sh $(V) out $(SCOPES)
+
+# Only this machine's platform: cross-compiling all five is CI's job (and the
+# Windows target must be built on Windows -- see .github/workflows/binaries.yaml).
+binaries:
+	tools/build-binaries.sh $(V) out
+
 clean:
 	rm -f flowr_*.tar.gz
-	rm -rf flowr.Rcheck
+	rm -rf flowr.Rcheck out .sigdb-work

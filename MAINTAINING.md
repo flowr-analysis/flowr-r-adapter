@@ -54,11 +54,25 @@ or wrong key aborts the install.
 ## 2. Publish the native binaries for a flowR version
 
 Run the **build-flowr-binaries** GitHub Action (Actions tab -> Run workflow),
-entering the flowR version (default `2.11.1`). It compiles a self-contained
-binary per platform (linux/darwin x64+arm64, win x64), uploads each as
-`flowr-<version>-<os>-<arch>.tar.gz` plus a `.sha256` and (if the secret is set)
-a `.sig`, to the `flowr-v<version>` release. The R side downloads and verifies
-these on demand.
+entering the flowR version (default `2.12.3`). To the `flowr-v<version>` release
+it uploads, each with a `.sha256` and (if the secret is set) a `.sig`:
+
+* `flowr-<version>-<os>-<arch>.tar.gz` — a self-contained binary per platform
+  (linux/darwin x64+arm64, win x64).
+* `flowr-sigdb-<set>-<version>.tar.gz` — flowR's signature database, as three
+  non-redundant sets (`base`, `current`, `history`); platform-independent and
+  shared by all engines. `flowr_install()` fetches what the `flowr.sigdb` option
+  selects.
+
+The R side downloads and verifies these on demand. Existing assets are skipped;
+tick **force_rebuild** to replace them without bumping the flowR version.
+
+Both are buildable locally with the same scripts CI runs, into `out/`:
+
+```sh
+make sigdb                 # all three sets (or: make sigdb SCOPES=current)
+make binaries              # this machine's platform only
+```
 
 ## 3. Update the shipped bundle when bumping flowR
 

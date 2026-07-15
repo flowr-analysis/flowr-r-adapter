@@ -60,7 +60,8 @@
 
 # Download + integrity-check + extract --------------------------------------
 
-.flowr_download_verify <- function(url, sha256, dest, quiet = flowr_option("quiet")) {
+.flowr_download_verify <- function(url, sha256, dest, quiet = flowr_option("quiet"),
+                                   on_missing = NULL) {
   ok <- tryCatch({
     # quiet = FALSE lets download.file draw its own progress bar so a large
     # binary download is visibly making progress rather than appearing to hang.
@@ -69,10 +70,13 @@
   }, error = function(e) FALSE)
   if (!isTRUE(ok)) {
     unlink(dest)
-    .flowr_stop("could not download the flowR binary from\n  ", url,
-         "\n(the prebuilt binary for this platform/version may not be published ",
-         "yet). Use flowr_connect(engine = \"bundled\") or ",
-         "flowr_install(engine = \"node\") instead.")
+    # the caller says what a missing download means; only the binary can suggest
+    # falling back to another engine.
+    .flowr_stop(on_missing %||% paste0(
+      "could not download the flowR binary from\n  ", url,
+      "\n(the prebuilt binary for this platform/version may not be published ",
+      "yet). Use flowr_connect(engine = \"bundled\") or ",
+      "flowr_install(engine = \"node\") instead."))
   }
   if (!quiet) {
     message(sprintf("[flowr]   downloaded %.1f MB; verifying integrity ...",
@@ -174,7 +178,7 @@
 # gpg is needed and the check is deterministic). The mandatory SHA-256 checksum
 # (via `digest`) guards integrity; the signature additionally proves provenance
 # against the pinned key.
-.flowr_verify_signature <- function(archive, sig_url) {
+.flowr_verify_signature <- function(archive, sig_url, what = "flowR binary") {
   # Secure mode makes signature verification MANDATORY: every branch that cannot
   # complete the check fails closed instead of downgrading to checksum-only, so a
   # stripped signature, a missing verifier, or a removed key can never silently
@@ -192,7 +196,7 @@
   }
   pub <- system.file("flowr-pubkey.pem", package = "flowr")
   if (!nzchar(pub) || !file.exists(pub)) {
-    return(refuse("no pinned public key is shipped to verify the binary against"))
+    return(refuse(paste0("no pinned public key is shipped to verify the ", what, " against")))
   }
   if (is.null(sig_url) || !nzchar(sig_url)) {
     return(refuse("this download provides no signature"))
@@ -212,9 +216,9 @@
   sig_raw <- readBin(sig, "raw", n = file.info(sig)$size)
   data <- readBin(archive, "raw", n = file.info(archive)$size)
   if (!.flowr_verify_sig(data, sig_raw, pub)) {
-    unlink(archive)                              # never keep a binary that failed
-    .flowr_stop("signature verification failed for the downloaded flowR binary ",
-         "(it did not match the pinned key).")
+    unlink(archive)                              # never keep a download that failed
+    .flowr_stop("signature verification failed for the downloaded ", what,
+         " (it did not match the pinned key).")
   }
   invisible(TRUE)
 }
@@ -717,7 +721,12 @@
   spec$ensure(flowr_version, quiet)
   port <- .flowr_free_port(port)
   s <- spec$spawn(flowr_version, flowr_engine, port, ws)
-  .flowr_spawn_wait(engine, s$cmd, s$args, s$host, port, timeout)
+  # The signature database is engine-independent data: mount it (when installed)
+  # around the spawn so binary/bundled/node all resolve library() exports alike.
+  .flowr_with_sigdb(
+    .flowr_spawn_wait(engine, s$cmd, s$args, s$host, port, timeout),
+    version = flowr_version
+  )
 }
 
 # Spawn a server process and wait until it is ready; on any failure the child is

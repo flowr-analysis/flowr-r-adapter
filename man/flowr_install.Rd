@@ -7,16 +7,21 @@
 flowr_install(
   version = flowr_option("flowr_version"),
   engine = c("binary", "node", "docker"),
+  sigdb = flowr_option("sigdb"),
   quiet = FALSE,
   force = FALSE
 )
 }
 \arguments{
-\item{version}{flowR version to install (default \code{"2.11.1"}).}
+\item{version}{flowR version to install (default \code{"2.12.3"}).}
 
 \item{engine}{\code{"binary"} (a self-contained executable, no Node/Docker needed),
 \code{"node"} (the flowR npm package run with a system or private Node.js) or
 \code{"docker"} (pull the flowR docker image).}
+
+\item{sigdb}{Signature-database sets to install with the engine: \code{"base"},
+\code{"current"}, \code{"history"}, \code{"all"}, or \code{"none"}. Defaults to the
+\code{flowr.sigdb} option (\code{"current"}). See \emph{The signature database}.}
 
 \item{quiet}{Suppress progress messages.}
 
@@ -30,10 +35,45 @@ Downloads and caches a flowR engine so it can be started by \code{\link[=flowr_c
 The cache lives under \code{tools::R_user_dir("flowr", "cache")}. Downloaded
 binaries are verified against the checksums in the package manifest before use.
 }
+\section{The signature database}{
+
+The engine arrives with flowR's signature database, so \code{library()} and \code{::}
+exports resolve straight away; without it flowR still analyses code, it just
+cannot resolve package exports. It is a separate, platform-independent
+download shared by every engine, so it is skipped when already present, and a
+failure to obtain it is a warning rather than an error.
+
+\code{sigdb} selects which sets to fetch. They are non-redundant and mount
+together, so this picks what to download rather than choosing between
+overlapping bundles:
+
+\describe{
+\item{\code{"base"}}{~1 MB. Base R only.}
+\item{\code{"current"}}{~24 MB. Base R plus every current CRAN package. The
+default, and enough for almost everything.}
+\item{\code{"history"}}{~35 MB. Past package versions. This \emph{supplements}
+\code{"current"} (it holds no base-R signatures of its own), so add it
+alongside, not instead.}
+}
+
+Also \code{"all"} and \code{"none"}. The default comes from the \code{flowr.sigdb} option, so
+\code{options(flowr.sigdb = "none")} turns it off for good.
+
+The engine and the database are obtained independently: an already-installed
+engine is left alone, so \code{flowr_install(sigdb = "history")} just adds that set,
+and \code{force = TRUE} re-fetches both. Remove the database with
+\code{\link[=flowr_uninstall]{flowr_uninstall()}}.
+}
+
 \examples{
 \dontrun{
-flowr_install()                    # default binary engine, flowR 2.11.1
-flowr_install(engine = "node")     # Node engine
+flowr_install()                    # binary engine + signature database
+flowr_install(sigdb = "none")      # engine only
+flowr_install(sigdb = "all")       # ... with every database set
+flowr_install(sigdb = "history")   # add a set to an installed engine
 flowr_install(engine = "docker")   # pull the flowR docker image
 }
+}
+\seealso{
+\code{\link[=flowr_uninstall]{flowr_uninstall()}}, \code{\link[=flowr_status]{flowr_status()}}
 }

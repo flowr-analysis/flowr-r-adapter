@@ -123,4 +123,4 @@ roxygen2::roxygenise()
 NOT_CRAN=true Rscript -e 'testthat::test_local()'
 ```
 
-Targets flowR **2.11.1**.
+Targets flowR **2.12.3**.

@@ -16,6 +16,15 @@
 #'   (line 3, variable `x`), `"7:3"` (line:column) or `"$42"` (a node id).
 #' @param direction Slice `"backward"` (default: everything the criterion
 #'   depends on) or `"forward"` (everything that depends on the criterion).
+#' @param include_callees Continue a **backward** slice past a function-definition
+#'   boundary, also pulling in the definition's binding and call sites. flowR
+#'   ignores this for forward slices, so `slice()` warns if you combine the two.
+#'   Off by default; needs flowR >= 2.12.
+#' @param inline_sources Inline resolvable `source()` calls into the reconstructed
+#'   code, so the slice is a single self-contained R script. `source()` calls that
+#'   are cyclic or whose path cannot be resolved are kept verbatim and reported in
+#'   the result's `inline_warnings` (and warned about once). Off by default; needs
+#'   flowR >= 2.12.
 #' @param file Path to a single R file to analyse.
 #' @param folder Path to a folder; all `.R` files in it (recursively) are
 #'   analysed together for a multi-file slice. Needs a real engine.
@@ -26,8 +35,11 @@
 #'   session is used when `NULL`. Pass an explicit one to work with several at once.
 #' @return A `flowr_slice` with `code` (reconstructed slice), `ids` (included
 #'   node ids), `original` (the input source), `lines` (original line numbers in
-#'   the slice), plus `criteria`, `direction` and the raw `response`. Printing
-#'   shows a colored git-style diff by default; see [print.flowr_slice()].
+#'   the slice), plus `criteria`, `direction` and the raw `response`. With
+#'   `inline_sources = TRUE` it also carries `inline_warnings`, a data frame of
+#'   `source()` calls that could not be inlined (`kind` is `"cycle"` or
+#'   `"unresolved"`, with the call's node `id` and, when known, its `path`).
+#'   Printing shows a colored git-style diff by default; see [print.flowr_slice()].
 #' @section Analysing the current project:
 #' Every command that takes `code`/`file`/`folder` follows the same rule: pass
 #' `code` (a string), `file` (one `.R` file) or `folder` (analysed recursively),
@@ -46,11 +58,21 @@
 #' slice("x <- 1\ny <- 2\ncat(x)", "3@x")$code
 #' }
 slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
+                  include_callees = FALSE, inline_sources = FALSE,
                   file = NULL, folder = NULL, cfg = FALSE,
                   style = getOption("flowr.slice_style", "diff"), session = NULL) {
   done <- .flowr_timer("slice"); on.exit(done(), add = TRUE)
   direction <- match.arg(direction)
   style <- match.arg(style, c("diff", "gray", "code"))
+  include_callees <- .flowr_flag(include_callees, "include_callees")
+  inline_sources <- .flowr_flag(inline_sources, "inline_sources")
+  # flowR applies includeCallees only when slicing backward; say so rather than
+  # silently returning an unchanged forward slice.
+  if (include_callees && direction == "forward") {
+    .flowr_warn("`include_callees` only applies to backward slices; ",
+                "ignoring it for this forward slice")
+    include_callees <- FALSE
+  }
   # validate before starting an engine, so bad calls fail fast
   if (missing(criterion) || length(criterion) == 0) {
     .flowr_stop("provide a slicing `criterion`, e.g. \"3@x\"")
@@ -70,6 +92,11 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
   # path); the legacy `request-slice` returns no results in flowR 2.11.1.
   qobj <- list(type = "static-slice", criteria = I(as.character(criterion)),
                direction = direction)
+  # Only send the 2.12 knobs when switched on: flowR validates the query with a
+  # Joi schema that rejects unknown fields, so an unconditional `includeCallees`
+  # would break sessions pinned to an older flowR instead of just being ignored.
+  if (include_callees) qobj$includeCallees <- TRUE
+  if (inline_sources) qobj$inlineSources <- TRUE
   req <- list(
     type = "request-query", id = .flowr_session_id(session),
     filetoken = an$filetoken, query = I(list(qobj))
@@ -90,6 +117,14 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
                 "\n  criteria look like \"line@name\", \"line:col\" or \"$id\"; ",
                 "check the line/name exists")
   }
+  # `source()` calls flowR could not inline stay in the code verbatim, which is
+  # easy to miss in a slice that claims to be self-contained: surface them as a
+  # tidy frame on the result and warn once.
+  inline_warnings <- .flowr_inline_warnings(entry$reconstruct$inlineWarnings)
+  if (nrow(inline_warnings) > 0) {
+    .flowr_warn(nrow(inline_warnings), " source() call(s) could not be inlined ",
+                "and are kept as-is; see $inline_warnings")
+  }
   # record flowR's own phase timings so `flowr.timing` shows the breakdown
   .flowr_timing_detail(c(.flowr_analysis_phases(an$analysis),
                          slice = entry$slice$.meta$timing,
@@ -102,6 +137,9 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
       lines = lines,
       criteria = as.character(criterion),
       direction = direction,
+      include_callees = include_callees,
+      inline_sources = inline_sources,
+      inline_warnings = inline_warnings,
       style = style,
       filetoken = an$filetoken,
       analysis = an$analysis,
@@ -109,6 +147,27 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
     ),
     class = "flowr_slice"
   )
+}
+
+# flowR's `reconstruct.inlineWarnings` (only present with inlineSources) as a
+# stable data frame: one row per source() call kept verbatim. Always returns the
+# same columns, so `$inline_warnings` can be used without an is.null() dance.
+.flowr_inline_warnings <- function(x) {
+  empty <- data.frame(kind = character(0), id = character(0), path = character(0),
+                      stringsAsFactors = FALSE)
+  if (is.null(x) || length(x) == 0) {
+    return(empty)
+  }
+  rows <- lapply(x, function(w) {
+    data.frame(
+      kind = as.character(w$kind %||% NA_character_),
+      id   = as.character(w$callId %||% NA_character_),
+      # `path` is optional: flowR omits it for a dynamic source() it cannot resolve
+      path = as.character(w$path %||% NA_character_),
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, c(list(empty), rows))
 }
 
 # The root of the R project/package enclosing `start`. An R package (DESCRIPTION)
@@ -385,7 +444,7 @@ print.flowr_slice <- function(x, style = x$style %||% getOption("flowr.slice_sty
 #' @inheritParams slice
 #' @param query The query or queries to run. See *Details* for the shape.
 #' @return The query results, a named list keyed by query type.
-#' @details Supported query types in flowR 2.11.1 include `dependencies`,
+#' @details Supported query types in flowR 2.12.3 include `dependencies`,
 #'   `call-context`, `dataflow`, `df-shape`, `static-slice`, `id-map`,
 #'   `normalized-ast`, `linter`, `location-map`, `call-graph`, and more. Pass
 #'   extra arguments by using the object form, e.g.
@@ -692,8 +751,11 @@ flowr_console <- function(engine = flowr_option("engine"),
   message("[flowr] flowR console (", eng, ", flowR ", flowr_version,
           if (isTRUE(r_access)) ", R execution on" else "",
           "); type :quit to exit.")
-  # inherit this process's stdio so flowR's readline/completion drive the tty
-  invisible(system2(cc$cmd, c(cc$args, extra)))
+  # inherit this process's stdio so flowR's readline/completion drive the tty,
+  # and the signature database (when installed) so the console resolves exports
+  # exactly like a server session does
+  invisible(.flowr_with_sigdb(system2(cc$cmd, c(cc$args, extra)),
+                              version = flowr_version))
 }
 
 #' Re-run a flowr command whenever a file changes

@@ -2,12 +2,24 @@
 % Please edit documentation in R/install.R
 \name{flowr_uninstall}
 \alias{flowr_uninstall}
-\title{Remove cached flowR engines}
+\title{Remove cached flowR engines and signature databases}
 \usage{
-flowr_uninstall(version = NULL, docker = FALSE, quiet = FALSE)
+flowr_uninstall(
+  version = NULL,
+  engine = "all",
+  sigdb = "all",
+  docker = FALSE,
+  quiet = FALSE
+)
 }
 \arguments{
-\item{version}{A version to remove, or \code{NULL} to remove the whole cache.}
+\item{version}{A version to remove, or \code{NULL} for every cached version.}
+
+\item{engine}{Engines to remove: \code{"all"} (default), \code{"none"}, \code{"binary"} or
+\code{"node"} (or a vector of them).}
+
+\item{sigdb}{Signature-database sets to remove: \code{"all"} (default), \code{"none"},
+or any of \code{"base"}, \code{"current"}, \code{"history"}. See \code{\link[=flowr_install]{flowr_install()}}.}
 
 \item{docker}{Also remove the flowR docker image for \code{version} (best effort).}
 
@@ -17,14 +29,24 @@ flowr_uninstall(version = NULL, docker = FALSE, quiet = FALSE)
 \code{TRUE}, invisibly.
 }
 \description{
-Removes downloaded binary/node engines from the cache. The docker image is
-left in place unless \code{docker = TRUE} (removing it needs the docker daemon).
-The \code{bundled} engine cannot be removed: flowR's JS+wasm bundle ships inside
-the package, so \code{flowr_is_installed()} can stay \code{TRUE} after uninstalling.
+Removes downloaded engines and the signature database from the cache. By
+default everything goes; \code{engine} and \code{sigdb} select what to remove, mirroring
+\code{\link[=flowr_install]{flowr_install()}}, so you can drop one piece and keep the rest.
+}
+\details{
+The docker image is left in place unless \code{docker = TRUE} (removing it needs
+the docker daemon). The \code{bundled} engine cannot be removed: flowR's JS+wasm
+bundle ships inside the package, so \code{flowr_is_installed()} can stay \code{TRUE}
+after uninstalling.
 }
 \examples{
 \dontrun{
-flowr_uninstall()               # remove downloaded engines from the cache
-flowr_uninstall(docker = TRUE)  # also remove the pulled docker image
+flowr_uninstall()                              # engines + database
+flowr_uninstall(engine = "none", sigdb = "history")  # just that database set
+flowr_uninstall(sigdb = "none")                # engines only, keep the database
+flowr_uninstall(docker = TRUE)                 # also remove the pulled image
 }
+}
+\seealso{
+\code{\link[=flowr_install]{flowr_install()}}
 }

@@ -9,7 +9,7 @@
 
 .flowr_defaults <- list(
   engine          = "auto",        # auto | bundled | binary | node | docker
-  flowr_version   = "2.11.1",      # flowR release to obtain / image tag
+  flowr_version   = "2.12.3",      # flowR release to obtain / image tag
   flowr_engine    = "tree-sitter", # flowR parser engine: tree-sitter | r-shell
   host            = "127.0.0.1",
   port            = 1042L,          # used as-is for `remote`; a free port is
@@ -35,7 +35,13 @@
   quiet           = FALSE,
   lint_rules      = character(0),   # active flowr_lint() rules; empty = flowR's
                                     # full default set (as the VS Code extension)
-  lint_max        = 10L             # findings shown per rule unless full = TRUE
+  lint_max        = 10L,            # findings shown per rule unless full = TRUE
+  # Which signature-database sets to obtain with an engine (see ?flowr_install).
+  # The sets are non-redundant and mount together, so this selects what to
+  # download: "current" (base R + all current CRAN, ~24 MB) is enough for almost
+  # everything; add "history" (~35 MB) for past package versions, drop to "base"
+  # (~1 MB) for base R only, or "none" to download no database at all.
+  sigdb           = "current"
 )
 
 # Read a single configuration value, resolving (in order) an explicit `value`,
@@ -71,7 +77,7 @@ flowr_option <- function(name, value = NULL) {
 # JSON config file ------------------------------------------------------------
 #
 # Settings may also live in a `flowr.json` file whose keys are option names
-# (e.g. {"engine": "binary", "flowr_version": "2.11.1", "secure": true}). It is
+# (e.g. {"engine": "binary", "flowr_version": "2.12.3", "secure": true}). It is
 # looked up at `options(flowr.config_file=)`, then `$FLOWR_CONFIG`, then
 # `flowr.json` in the working directory, then a per-user config file. Options
 # and environment variables still take precedence over it.
@@ -129,6 +135,17 @@ flowr_config_file <- function() {
   .flowr_state$config_json_path <- path
   .flowr_state$config_json_mtime <- mtime
   parsed
+}
+
+# Validate a user-supplied on/off argument. Options and environment variables
+# already arrive as logicals via .flowr_coerce(); this guards the explicit
+# argument, so a typo fails with the parameter's name instead of silently
+# reaching flowR as a bad query field.
+.flowr_flag <- function(x, name) {
+  if (!is.logical(x) || length(x) != 1L || is.na(x)) {
+    .flowr_stop("`", name, "` must be TRUE or FALSE")
+  }
+  x
 }
 
 # Coerce an environment-variable string to the type of the default value.

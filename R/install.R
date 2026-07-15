@@ -12,24 +12,60 @@
 #' The cache lives under `tools::R_user_dir("flowr", "cache")`. Downloaded
 #' binaries are verified against the checksums in the package manifest before use.
 #'
-#' @param version flowR version to install (default `"2.11.1"`).
+#' @section The signature database:
+#' The engine arrives with flowR's signature database, so `library()` and `::`
+#' exports resolve straight away; without it flowR still analyses code, it just
+#' cannot resolve package exports. It is a separate, platform-independent
+#' download shared by every engine, so it is skipped when already present, and a
+#' failure to obtain it is a warning rather than an error.
+#'
+#' `sigdb` selects which sets to fetch. They are non-redundant and mount
+#' together, so this picks what to download rather than choosing between
+#' overlapping bundles:
+#'
+#' \describe{
+#'   \item{`"base"`}{~1 MB. Base R only.}
+#'   \item{`"current"`}{~24 MB. Base R plus every current CRAN package. The
+#'     default, and enough for almost everything.}
+#'   \item{`"history"`}{~35 MB. Past package versions. This *supplements*
+#'     `"current"` (it holds no base-R signatures of its own), so add it
+#'     alongside, not instead.}
+#' }
+#'
+#' Also `"all"` and `"none"`. The default comes from the `flowr.sigdb` option, so
+#' `options(flowr.sigdb = "none")` turns it off for good.
+#'
+#' The engine and the database are obtained independently: an already-installed
+#' engine is left alone, so `flowr_install(sigdb = "history")` just adds that set,
+#' and `force = TRUE` re-fetches both. Remove the database with
+#' [flowr_uninstall()].
+#'
+#' @param version flowR version to install (default `"2.12.3"`).
 #' @param engine `"binary"` (a self-contained executable, no Node/Docker needed),
 #'   `"node"` (the flowR npm package run with a system or private Node.js) or
 #'   `"docker"` (pull the flowR docker image).
+#' @param sigdb Signature-database sets to install with the engine: `"base"`,
+#'   `"current"`, `"history"`, `"all"`, or `"none"`. Defaults to the
+#'   `flowr.sigdb` option (`"current"`). See *The signature database*.
 #' @param quiet Suppress progress messages.
 #' @param force Reinstall even if already present.
 #' @return `TRUE`, invisibly.
+#' @seealso [flowr_uninstall()], [flowr_status()]
 #' @export
 #' @examples
 #' \dontrun{
-#' flowr_install()                    # default binary engine, flowR 2.11.1
-#' flowr_install(engine = "node")     # Node engine
+#' flowr_install()                    # binary engine + signature database
+#' flowr_install(sigdb = "none")      # engine only
+#' flowr_install(sigdb = "all")       # ... with every database set
+#' flowr_install(sigdb = "history")   # add a set to an installed engine
 #' flowr_install(engine = "docker")   # pull the flowR docker image
 #' }
 flowr_install <- function(version = flowr_option("flowr_version"),
                           engine = c("binary", "node", "docker"),
+                          sigdb = flowr_option("sigdb"),
                           quiet = FALSE, force = FALSE) {
   engine <- match.arg(engine)
+  scopes <- .flowr_sigdb_scopes(sigdb)      # validate before any download
   if (engine == "binary") {
     if (force) {
       unlink(.flowr_binary_dir(version, .flowr_platform()$key), recursive = TRUE)
@@ -53,6 +89,9 @@ flowr_install <- function(version = flowr_option("flowr_version"),
       .flowr_install_node_flowr(version, quiet = quiet)
     }
   }
+  # The database is engine-independent, so every engine gets it; `force` re-fetches
+  # it too, since it is part of what was just (re)installed.
+  .flowr_ensure_sigdb(version, quiet = quiet, scopes = scopes, force = force)
   invisible(TRUE)
 }
 
@@ -174,44 +213,119 @@ flowr_update <- function(version = NULL, engine = c("binary", "node", "docker"),
   invisible(version)
 }
 
-#' Remove cached flowR engines
+# Normalise an `engine` selection for flowr_uninstall(): "all"/"none" or any of
+# the removable engines. `bundled` ships inside the package and docker has its
+# own flag, so neither is selectable here.
+.flowr_removable_engines <- c("binary", "node")
+.flowr_uninstall_engines <- function(x) {
+  if (is.null(x) || isFALSE(x) || length(x) == 0L) {
+    return(character(0))
+  }
+  x <- trimws(unlist(strsplit(as.character(x), "[,[:space:]]+")))
+  x <- x[nzchar(x)]
+  if (length(x) == 0L || any(x %in% c("none", "off"))) {
+    return(character(0))
+  }
+  if (any(x == "all")) {
+    return(.flowr_removable_engines)
+  }
+  bad <- setdiff(x, .flowr_removable_engines)
+  if (length(bad) > 0L) {
+    .flowr_stop("cannot uninstall engine(s): ", paste(bad, collapse = ", "),
+         "\n  pick from: ", paste(.flowr_removable_engines, collapse = ", "),
+         ", or \"all\" / \"none\"",
+         "\n  (the bundled engine ships in the package; use docker = TRUE for the image)")
+  }
+  .flowr_removable_engines[.flowr_removable_engines %in% x]
+}
+
+#' Remove cached flowR engines and signature databases
 #'
-#' Removes downloaded binary/node engines from the cache. The docker image is
-#' left in place unless `docker = TRUE` (removing it needs the docker daemon).
-#' The `bundled` engine cannot be removed: flowR's JS+wasm bundle ships inside
-#' the package, so `flowr_is_installed()` can stay `TRUE` after uninstalling.
+#' Removes downloaded engines and the signature database from the cache. By
+#' default everything goes; `engine` and `sigdb` select what to remove, mirroring
+#' [flowr_install()], so you can drop one piece and keep the rest.
 #'
-#' @param version A version to remove, or `NULL` to remove the whole cache.
+#' The docker image is left in place unless `docker = TRUE` (removing it needs
+#' the docker daemon). The `bundled` engine cannot be removed: flowR's JS+wasm
+#' bundle ships inside the package, so `flowr_is_installed()` can stay `TRUE`
+#' after uninstalling.
+#'
+#' @param version A version to remove, or `NULL` for every cached version.
+#' @param engine Engines to remove: `"all"` (default), `"none"`, `"binary"` or
+#'   `"node"` (or a vector of them).
+#' @param sigdb Signature-database sets to remove: `"all"` (default), `"none"`,
+#'   or any of `"base"`, `"current"`, `"history"`. See [flowr_install()].
 #' @param docker Also remove the flowR docker image for `version` (best effort).
 #' @param quiet Suppress the summary message.
 #' @return `TRUE`, invisibly.
+#' @seealso [flowr_install()]
 #' @export
 #' @examples
 #' \dontrun{
-#' flowr_uninstall()               # remove downloaded engines from the cache
-#' flowr_uninstall(docker = TRUE)  # also remove the pulled docker image
+#' flowr_uninstall()                              # engines + database
+#' flowr_uninstall(engine = "none", sigdb = "history")  # just that database set
+#' flowr_uninstall(sigdb = "none")                # engines only, keep the database
+#' flowr_uninstall(docker = TRUE)                 # also remove the pulled image
 #' }
-flowr_uninstall <- function(version = NULL, docker = FALSE, quiet = FALSE) {
-  if (is.null(version)) {
+flowr_uninstall <- function(version = NULL, engine = "all", sigdb = "all",
+                            docker = FALSE, quiet = FALSE) {
+  engines <- .flowr_uninstall_engines(engine)
+  scopes <- .flowr_sigdb_scopes(sigdb)
+  everything <- setequal(engines, .flowr_removable_engines) &&
+    setequal(scopes, .flowr_sigdb_all_scopes)
+  # whole cache in one go when nothing is being kept, so no stray file survives
+  if (is.null(version) && everything) {
     unlink(.flowr_cache_dir(), recursive = TRUE)
   } else {
-    unlink(.flowr_binary_dir(version, .flowr_platform()$key), recursive = TRUE)
-    unlink(.flowr_node_dir(version), recursive = TRUE)
-    if (isTRUE(docker) && .flowr_docker_installed(version)) {
-      tryCatch(sys::exec_wait("docker", c("rmi", .flowr_docker_image(version)),
-                              std_out = FALSE, std_err = FALSE),
-               error = function(e) NULL)
+    versions <- if (is.null(version)) .flowr_cached_versions() else version
+    for (v in versions) {
+      if ("binary" %in% engines) {
+        unlink(.flowr_binary_dir(v, .flowr_platform()$key), recursive = TRUE)
+      }
+      if ("node" %in% engines) {
+        unlink(.flowr_node_dir(v), recursive = TRUE)
+      }
+      if (setequal(scopes, .flowr_sigdb_all_scopes)) {
+        unlink(.flowr_sigdb_dir(v), recursive = TRUE)
+      } else {
+        # the sets share a directory but are file-prefixed, so one can go alone
+        for (s in scopes) {
+          unlink(Sys.glob(file.path(.flowr_sigdb_dir(v), paste0(s, ".*"))))
+        }
+      }
     }
   }
+  if (isTRUE(docker) && !is.null(version) && .flowr_docker_installed(version)) {
+    tryCatch(sys::exec_wait("docker", c("rmi", .flowr_docker_image(version)),
+                            std_out = FALSE, std_err = FALSE),
+             error = function(e) NULL)
+  }
   if (!quiet && !isTRUE(flowr_option("quiet"))) {
-    msg <- "[flowr] removed downloaded engines from the cache."
-    if (.flowr_bundled_available()) {
+    what <- c(if (length(engines) > 0L) paste0(paste(engines, collapse = " + "), " engine(s)"),
+              if (length(scopes) > 0L) paste0("sigdb (", paste(scopes, collapse = ", "), ")"))
+    msg <- if (length(what) == 0L) {
+      "[flowr] nothing selected; the cache is unchanged."
+    } else {
+      paste0("[flowr] removed ", paste(what, collapse = " and "), " from the cache.")
+    }
+    if (length(engines) > 0L && .flowr_bundled_available()) {
       msg <- paste0(msg, " The shipped bundle (engine = \"bundled\", needs Node) ",
                     "remains available.")
     }
     message(msg)
   }
   invisible(TRUE)
+}
+
+# Every flowR version with something in the cache, from the directory names the
+# installers create.
+.flowr_cached_versions <- function() {
+  dirs <- basename(Sys.glob(file.path(.flowr_cache_dir(), c("binary-*", "node-flowr-*", "sigdb-*"))))
+  v <- sub("^sigdb-", "", dirs)
+  v <- sub("^node-flowr-", "", v)
+  # binary-<version>-<platform key>: drop the prefix, then the trailing key
+  v <- sub("^binary-(.*)-[^-]+-[^-]+$", "\\1", v)
+  sort(unique(v[nzchar(v)]))
 }
 
 # Ensure an engine is present, asking for consent before any download.

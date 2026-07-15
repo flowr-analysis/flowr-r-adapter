@@ -8,6 +8,8 @@ slice(
   code = NULL,
   criterion,
   direction = c("backward", "forward"),
+  include_callees = FALSE,
+  inline_sources = FALSE,
   file = NULL,
   folder = NULL,
   cfg = FALSE,
@@ -26,6 +28,17 @@ current project} section).}
 \item{direction}{Slice \code{"backward"} (default: everything the criterion
 depends on) or \code{"forward"} (everything that depends on the criterion).}
 
+\item{include_callees}{Continue a \strong{backward} slice past a function-definition
+boundary, also pulling in the definition's binding and call sites. flowR
+ignores this for forward slices, so \code{slice()} warns if you combine the two.
+Off by default; needs flowR >= 2.12.}
+
+\item{inline_sources}{Inline resolvable \code{source()} calls into the reconstructed
+code, so the slice is a single self-contained R script. \code{source()} calls that
+are cyclic or whose path cannot be resolved are kept verbatim and reported in
+the result's \code{inline_warnings} (and warned about once). Off by default; needs
+flowR >= 2.12.}
+
 \item{file}{Path to a single R file to analyse.}
 
 \item{folder}{Path to a folder; all \code{.R} files in it (recursively) are
@@ -42,8 +55,11 @@ session is used when \code{NULL}. Pass an explicit one to work with several at o
 \value{
 A \code{flowr_slice} with \code{code} (reconstructed slice), \code{ids} (included
 node ids), \code{original} (the input source), \code{lines} (original line numbers in
-the slice), plus \code{criteria}, \code{direction} and the raw \code{response}. Printing
-shows a colored git-style diff by default; see \code{\link[=print.flowr_slice]{print.flowr_slice()}}.
+the slice), plus \code{criteria}, \code{direction} and the raw \code{response}. With
+\code{inline_sources = TRUE} it also carries \code{inline_warnings}, a data frame of
+\code{source()} calls that could not be inlined (\code{kind} is \code{"cycle"} or
+\code{"unresolved"}, with the call's node \code{id} and, when known, its \code{path}).
+Printing shows a colored git-style diff by default; see \code{\link[=print.flowr_slice]{print.flowr_slice()}}.
 }
 \description{
 Computes a program slice for one or more slicing criteria and returns the
