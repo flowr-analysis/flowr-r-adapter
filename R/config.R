@@ -324,7 +324,7 @@ print.flowr_config <- function(x, ...) {
 #' @examples
 #' \dontrun{
 #' flowr_set_config(engine = "binary", request_timeout = 300)
-#' flowr_set_config(flowr_version = "2.12.0", persist = TRUE)
+#' flowr_set_config(flowr_version = "2.12.3", persist = TRUE)
 #' }
 flowr_set_config <- function(..., persist = FALSE) {
   vals <- list(...)
