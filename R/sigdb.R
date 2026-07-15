@@ -180,14 +180,78 @@
   force(expr)
 }
 
+# base::interactive() and base::readline() behind package bindings. A sealed
+# namespace (any installed package, so `R CMD check`) cannot have base functions
+# mocked out from under it, so the prompt could otherwise only be exercised by
+# hand -- which is how a prompt that blocks a script gets shipped.
+.flowr_interactive <- function() interactive()
+.flowr_readline <- function(prompt) readline(prompt)
+
+# Ask which sets to fetch. The choice spans ~35 MB, so when nobody has said what
+# they want, asking beats silently guessing in either direction. Interactive
+# only: an unattended session (CRAN, CI, a script) must never block on a prompt,
+# so it takes the default.
+.flowr_ask_sigdb <- function(default) {
+  if (!.flowr_interactive()) {
+    return(default)
+  }
+  message("flowR resolves library()/:: exports from a signature database:\n",
+          "  1: current  ~24 MB  base R + every current CRAN package (default)\n",
+          "  2: all      ~59 MB  ... and every past package version\n",
+          "  3: none             skip it; flowR still analyses code, it just\n",
+          "                      leaves package exports unresolved")
+  ans <- tolower(trimws(.flowr_readline("Download which? [1/2/3, default 1] ")))
+  if (!nzchar(ans)) {
+    ans <- "1"                                  # a bare Enter takes the default
+  }
+  pick <- switch(ans,
+    "1" = , "current" = "current",
+    "2" = , "all" = "all",
+    "3" = , "none" = "none",
+    NULL)
+  if (is.null(pick)) {
+    message("[flowr] \"", ans, "\" not understood; taking the default.")
+    return(default)
+  }
+  .flowr_sigdb_scopes(pick)
+}
+
+# Which sets to obtain: an explicit argument, or a configured `flowr.sigdb`,
+# settles it outright. Only when neither said anything -- and there is actually
+# something to download -- do we ask.
+.flowr_resolve_sigdb <- function(sigdb, ask, version, force = FALSE) {
+  scopes <- .flowr_sigdb_scopes(sigdb)          # validate before anything else
+  if (!ask) {
+    return(scopes)
+  }
+  if (!force && all(scopes %in% .flowr_sigdb_scopes_installed(version))) {
+    return(scopes)                              # nothing to fetch, nothing to ask
+  }
+  .flowr_ask_sigdb(scopes)
+}
+
 # Obtain the sets `flowr.sigdb` asks for, skipping those already present (unless
 # `force` re-fetches them). Used by flowr_install() so an engine arrives ready to
 # resolve exports; failures are reported but never fatal, since an engine without
 # a database still analyses.
 .flowr_ensure_sigdb <- function(version, quiet, scopes = .flowr_sigdb_scopes(),
                                 force = FALSE) {
-  want <- if (force) scopes else setdiff(scopes, .flowr_sigdb_scopes_installed(version))
+  have <- .flowr_sigdb_scopes_installed(version)
+  want <- if (force) scopes else setdiff(scopes, have)
+  # Say where the database stands even when there is nothing to do. The engine
+  # reports itself ("already installed"), so a silent database reads as one that
+  # was never considered -- the user cannot tell "present" from "forgotten".
   if (length(want) == 0L) {
+    if (!quiet) {
+      if (length(scopes) == 0L) {
+        message("[flowr] no signature database requested (flowr.sigdb = \"none\"); ",
+                "library() exports stay unresolved.")
+      } else {
+        message("[flowr] signature database (", paste(have, collapse = ", "),
+                ") already installed in ", .flowr_sigdb_dir(version),
+                " (use force = TRUE to re-download)")
+      }
+    }
     return(invisible(character(0)))
   }
   ok <- character(0)
@@ -202,6 +266,11 @@
       FALSE
     })
     if (isTRUE(done)) ok <- c(ok, s)
+  }
+  if (!quiet && length(ok) > 0L) {
+    message("[flowr] signature database ready (",
+            paste(.flowr_sigdb_scopes_installed(version), collapse = ", "), ", ",
+            .flowr_sigdb_verification(version), "-verified).")
   }
   invisible(ok)
 }

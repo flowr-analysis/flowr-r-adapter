@@ -41,7 +41,10 @@
   # download: "current" (base R + all current CRAN, ~24 MB) is enough for almost
   # everything; add "history" (~35 MB) for past package versions, drop to "base"
   # (~1 MB) for base R only, or "none" to download no database at all.
-  sigdb           = "current"
+  sigdb           = "current",
+  # Let flowr_status() mention a newer flowR/flowr release. Off-line safe and
+  # silent when up to date; set FALSE to never look (air-gapped, CI, ...).
+  check_updates   = TRUE
 )
 
 # Read a single configuration value, resolving (in order) an explicit `value`,
@@ -135,6 +138,19 @@ flowr_config_file <- function() {
   .flowr_state$config_json_path <- path
   .flowr_state$config_json_mtime <- mtime
   parsed
+}
+
+# TRUE when an option was deliberately configured (option, env var or config
+# file) rather than left at its built-in default. Lets a caller tell "the user
+# chose this" from "nobody said", so it can ask instead of guessing.
+.flowr_option_is_set <- function(name) {
+  if (!is.null(getOption(paste0("flowr.", name)))) {
+    return(TRUE)
+  }
+  if (nzchar(Sys.getenv(paste0("FLOWR_", toupper(name)), unset = ""))) {
+    return(TRUE)
+  }
+  !is.null(.flowr_config_json()[[name]])
 }
 
 # Validate a user-supplied on/off argument. Options and environment variables

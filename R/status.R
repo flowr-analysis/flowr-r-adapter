@@ -224,6 +224,8 @@ flowr_status <- function() {
       binary_hash = .flowr_binary_hash(fv),
       sigdb_scopes = .flowr_sigdb_scopes_installed(fv),
       sigdb_verification = .flowr_sigdb_verification(fv),
+      # empty when up to date, offline, or switched off (flowr.check_updates)
+      updates = .flowr_updates(),
       session = active,
       backend = backend
     ),
@@ -325,6 +327,17 @@ print.flowr_status <- function(x, ...) {
   })
   if (!is.null(x$session) && !is.null(x$session$log) && !is.na(x$session$log)) {
     row("server log", x$session$log)
+  }
+  # Only ever shown when something is genuinely out of date: being current and
+  # being unable to check both print nothing, so this stays quiet offline.
+  for (nm in names(x$updates)) {
+    row("update", .flowr_ansi(sprintf("%s %s -> %s available", nm, x$updates[[nm]][1],
+                                      x$updates[[nm]][2]), "33", color))
+    row("", .flowr_ansi(if (identical(nm, "flowR")) {
+      sprintf("flowr_update(\"%s\")", x$updates[[nm]][2])
+    } else {
+      "update the flowr package to get it"
+    }, "90", color))
   }
   cat(strrep("=", width), "\n", sep = "")
   invisible(x)

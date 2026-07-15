@@ -17,6 +17,16 @@
   warns rather than failing the install, and nothing is downloaded unless you
   ask: an analysis never fetches it. `flowr_status()` reports which sets are
   present and how they were verified.
+* In an interactive session, `flowr_install()` now asks which signature-database
+  sets to download when you pass no `sigdb` and have not set the `flowr.sigdb`
+  option --- the choice spans ~35 MB, so it is worth a question. Passing the
+  argument or setting the option settles it and is never asked about again, and
+  unattended sessions never prompt.
+* `flowr_status()` mentions a newer flowR or flowr release when one exists. It is
+  silent when you are up to date, silent when it cannot check (offline, DNS
+  failure, a rate-limited API), never errors or warns, and gives up after a few
+  seconds rather than stalling a session. It asks at most once per session; set
+  `options(flowr.check_updates = FALSE)` to never look.
 * `flowr_uninstall()` gains `engine` and `sigdb` arguments mirroring
   `flowr_install()`, so you can select what to remove instead of clearing
   everything: `flowr_uninstall(engine = "none", sigdb = "history")` drops one

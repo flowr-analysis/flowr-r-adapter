@@ -56,8 +56,12 @@ default, and enough for almost everything.}
 alongside, not instead.}
 }
 
-Also \code{"all"} and \code{"none"}. The default comes from the \code{flowr.sigdb} option, so
-\code{options(flowr.sigdb = "none")} turns it off for good.
+Also \code{"all"} and \code{"none"}. In an interactive session, if you pass no \code{sigdb}
+and have not set the \code{flowr.sigdb} option, you are asked which to fetch ---
+the sets differ by ~35 MB, so it is worth a question. Passing \code{sigdb}, or
+setting the option (e.g. \code{options(flowr.sigdb = "none")}), settles it and is
+never asked about again; unattended sessions never prompt and take
+\code{"current"}.
 
 The engine and the database are obtained independently: an already-installed
 engine is left alone, so \code{flowr_install(sigdb = "history")} just adds that set,

@@ -32,8 +32,12 @@
 #'     alongside, not instead.}
 #' }
 #'
-#' Also `"all"` and `"none"`. The default comes from the `flowr.sigdb` option, so
-#' `options(flowr.sigdb = "none")` turns it off for good.
+#' Also `"all"` and `"none"`. In an interactive session, if you pass no `sigdb`
+#' and have not set the `flowr.sigdb` option, you are asked which to fetch ---
+#' the sets differ by ~35 MB, so it is worth a question. Passing `sigdb`, or
+#' setting the option (e.g. `options(flowr.sigdb = "none")`), settles it and is
+#' never asked about again; unattended sessions never prompt and take
+#' `"current"`.
 #'
 #' The engine and the database are obtained independently: an already-installed
 #' engine is left alone, so `flowr_install(sigdb = "history")` just adds that set,
@@ -65,7 +69,13 @@ flowr_install <- function(version = flowr_option("flowr_version"),
                           sigdb = flowr_option("sigdb"),
                           quiet = FALSE, force = FALSE) {
   engine <- match.arg(engine)
-  scopes <- .flowr_sigdb_scopes(sigdb)      # validate before any download
+  # Ask which database sets to fetch only when nobody has said: an explicit
+  # `sigdb`, or a configured `flowr.sigdb`, is taken as given. Validates (and so
+  # rejects a bad set) before anything is downloaded.
+  scopes <- .flowr_resolve_sigdb(
+    sigdb, ask = missing(sigdb) && !.flowr_option_is_set("sigdb"),
+    version = version, force = force
+  )
   if (engine == "binary") {
     if (force) {
       unlink(.flowr_binary_dir(version, .flowr_platform()$key), recursive = TRUE)
@@ -144,17 +154,85 @@ flowr_is_installed <- function(engine = c("any", "all", "binary", "bundled", "no
   ready(engine)
 }
 
+# Version checks --------------------------------------------------------------
+#
+# Knowing about a newer release is a nicety, never a requirement, so everything
+# here fails soft: offline, DNS failure, a rate-limited API or a garbage reply
+# all collapse to NULL. Nothing signals, nothing warns, and a short timeout caps
+# the wait -- R's global `timeout` defaults to 60s, which would otherwise stall a
+# session on a black-holed connection. NULL means "no idea", and the caller then
+# says nothing at all.
+
+# Fetch and parse JSON, or NULL.
+.flowr_fetch_json <- function(url, timeout = 3) {
+  tryCatch({
+    old <- getOption("timeout")
+    on.exit(options(timeout = old), add = TRUE)
+    options(timeout = timeout)
+    tmp <- tempfile(fileext = ".json")
+    on.exit(unlink(tmp), add = TRUE)
+    suppressWarnings(utils::download.file(url, tmp, quiet = TRUE, mode = "wb"))
+    if (!file.exists(tmp) || !isTRUE(file.info(tmp)$size > 0)) {
+      return(NULL)
+    }
+    jsonlite::fromJSON(tmp)
+  }, error = function(e) NULL)
+}
+
+# A single version string out of a reply, or NULL when it is not one.
+.flowr_one_version <- function(x) {
+  if (is.character(x) && length(x) == 1L && nzchar(x)) sub("^v", "", x) else NULL
+}
+
 # The latest published flowR version, from the npm registry; NULL if it cannot
 # be determined (e.g. offline). Used by flowr_update() to check for updates.
 .flowr_latest_version <- function() {
-  url <- "https://registry.npmjs.org/@eagleoutice/flowr/latest"
-  tryCatch({
-    tmp <- tempfile(fileext = ".json")
-    on.exit(unlink(tmp), add = TRUE)
-    utils::download.file(url, tmp, quiet = TRUE, mode = "wb")
-    v <- jsonlite::fromJSON(tmp)$version
-    if (is.character(v) && length(v) == 1L && nzchar(v)) v else NULL
-  }, error = function(e) NULL)
+  .flowr_one_version(
+    .flowr_fetch_json("https://registry.npmjs.org/@eagleoutice/flowr/latest")$version)
+}
+
+# The latest published version of this package, from its GitHub releases. The
+# engine-binary releases are deliberately not marked "latest" (see the binaries
+# workflow), so this finds the adapter's own `v<version>` release.
+.flowr_latest_adapter_version <- function() {
+  url <- sprintf("https://api.github.com/repos/%s/releases/latest",
+                 flowr_option("binary_repo"))
+  .flowr_one_version(.flowr_fetch_json(url)$tag_name)
+}
+
+# What is out of date, as `name = c(have, latest)`; empty when everything is
+# current OR nothing could be checked -- the two are deliberately indistinguish-
+# able to callers, so being offline reads as "nothing to say" rather than an
+# error. Asked at most once per session (the answer cannot meaningfully change
+# within one), and not at all when `flowr.check_updates` is off, so an offline or
+# air-gapped user never pays for a lookup they did not ask for.
+.flowr_updates <- function() {
+  if (!isTRUE(flowr_option("check_updates"))) {
+    return(list())
+  }
+  if (!is.null(.flowr_state$updates)) {
+    return(.flowr_state$updates)
+  }
+  out <- tryCatch({
+    res <- list()
+    newer <- function(have, latest) {
+      !is.null(latest) && isTRUE(tryCatch(utils::compareVersion(latest, have) > 0,
+                                          error = function(e) FALSE))
+    }
+    have_flowr <- flowr_option("flowr_version")
+    new_flowr <- .flowr_latest_version()
+    if (newer(have_flowr, new_flowr)) {
+      res[["flowR"]] <- c(have_flowr, new_flowr)
+    }
+    have_pkg <- as.character(utils::packageVersion("flowr"))
+    new_pkg <- .flowr_latest_adapter_version()
+    if (newer(have_pkg, new_pkg)) {
+      res[["flowr"]] <- c(have_pkg, new_pkg)
+    }
+    res
+  }, error = function(e) list())
+  .flowr_state$updates <- out
+  out
 }
 
 #' Update flowR, or check for a newer version

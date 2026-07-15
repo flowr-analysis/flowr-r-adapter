@@ -282,3 +282,130 @@ test_that("uninstalling everything for every version clears the cache", {
   flowr_uninstall(quiet = TRUE)                    # no version, everything
   expect_false(dir.exists(cache))
 })
+
+# Asking which sets to download -----------------------------------------------
+
+# Pretend a human is at the console and answers `ans`; records whether asked.
+local_answer <- function(ans, env = parent.frame()) {
+  asked <- new.env(parent = emptyenv()); asked$n <- 0L
+  testthat::local_mocked_bindings(
+    .flowr_interactive = function() TRUE,
+    .flowr_readline = function(...) { asked$n <- asked$n + 1L; ans },
+    .env = env)
+  asked
+}
+
+test_that("the prompt maps every answer, and a stray one falls back to the default", {
+  local_answer("2")
+  expect_identical(flowr:::.flowr_ask_sigdb("current"), c("base", "current", "history"))
+  local_answer("all")
+  expect_identical(flowr:::.flowr_ask_sigdb("current"), c("base", "current", "history"))
+  local_answer("3")
+  expect_identical(flowr:::.flowr_ask_sigdb("current"), character(0))
+  local_answer("1")
+  expect_identical(flowr:::.flowr_ask_sigdb("current"), "current")
+  # just pressing enter takes the default
+  local_answer("")
+  expect_identical(flowr:::.flowr_ask_sigdb("current"), "current")
+  # nonsense does not silently become something else
+  local_answer("banana")
+  expect_message(expect_identical(flowr:::.flowr_ask_sigdb("current"), "current"),
+                 "not understood")
+})
+
+test_that("an unattended session takes the default instead of blocking", {
+  testthat::local_mocked_bindings(
+    .flowr_interactive = function() FALSE,
+    .flowr_readline = function(...) stop("must not prompt when unattended"))
+  expect_identical(flowr:::.flowr_ask_sigdb("current"), "current")
+})
+
+test_that("an explicit argument or a configured option is never asked about", {
+  local_sigdb_cache()
+  a <- local_answer("2")
+
+  # caller said so: no question
+  expect_identical(flowr:::.flowr_resolve_sigdb("base", ask = FALSE, version = "9.9.9"), "base")
+  expect_identical(a$n, 0L)
+
+  # nobody said: ask, and honour the answer
+  expect_identical(flowr:::.flowr_resolve_sigdb("current", ask = TRUE, version = "9.9.9"),
+                   c("base", "current", "history"))
+  expect_identical(a$n, 1L)
+})
+
+test_that("flowr_install asks only when neither the argument nor the config said", {
+  withr::local_options(list(flowr.secure = FALSE, flowr.verify_signature = FALSE))
+  local_sigdb_cache()
+  local_sigdb_source(local_sigdb_archive())
+  testthat::local_mocked_bindings(.flowr_binary_installed = function(...) TRUE)
+
+  # the option is set -> settled, no prompt
+  withr::with_options(list(flowr.sigdb = "current"), {
+    a <- local_answer("2")
+    flowr_install(version = "9.9.9", quiet = TRUE)
+    expect_identical(a$n, 0L)
+  })
+  # an explicit argument -> settled, no prompt
+  a <- local_answer("2")
+  withr::local_options(list(flowr.sigdb = NULL))
+  flowr_install(version = "9.9.9", sigdb = "current", quiet = TRUE)
+  expect_identical(a$n, 0L)
+})
+
+test_that("nothing left to download means nothing to ask about", {
+  withr::local_options(list(flowr.secure = FALSE, flowr.verify_signature = FALSE,
+                            flowr.sigdb = NULL))
+  local_sigdb_cache()
+  local_sigdb_source(local_sigdb_archive())
+  install_sigdb("current")
+
+  a <- local_answer("2")
+  expect_identical(flowr:::.flowr_resolve_sigdb("current", ask = TRUE, version = "9.9.9"),
+                   "current")
+  expect_identical(a$n, 0L)                       # already there: no question
+  # ... unless we are re-fetching anyway
+  expect_identical(flowr:::.flowr_resolve_sigdb("current", ask = TRUE, version = "9.9.9",
+                                                force = TRUE),
+                   c("base", "current", "history"))
+  expect_identical(a$n, 1L)
+})
+
+test_that(".flowr_option_is_set tells a choice from a default", {
+  withr::local_options(list(flowr.sigdb = NULL))
+  withr::local_envvar(c(FLOWR_SIGDB = NA))
+  expect_false(flowr:::.flowr_option_is_set("sigdb"))
+
+  withr::local_options(list(flowr.sigdb = "all"))
+  expect_true(flowr:::.flowr_option_is_set("sigdb"))
+
+  withr::local_options(list(flowr.sigdb = NULL))
+  withr::local_envvar(c(FLOWR_SIGDB = "none"))
+  expect_true(flowr:::.flowr_option_is_set("sigdb"))
+})
+
+# Reporting -------------------------------------------------------------------
+
+test_that("the database reports itself even when there is nothing to do", {
+  withr::local_options(list(flowr.secure = FALSE, flowr.verify_signature = FALSE,
+                            flowr.quiet = FALSE))
+  local_sigdb_cache()
+  local_sigdb_source(local_sigdb_archive())
+
+  # installing says so ...
+  expect_message(flowr:::.flowr_ensure_sigdb("9.9.9", quiet = FALSE, scopes = "current"),
+                 "signature database ready")
+  # ... and so does finding it already there, rather than staying silent and
+  # looking like it was never considered
+  expect_message(flowr:::.flowr_ensure_sigdb("9.9.9", quiet = FALSE, scopes = "current"),
+                 "already installed")
+  # quiet still means quiet
+  expect_silent(flowr:::.flowr_ensure_sigdb("9.9.9", quiet = TRUE, scopes = "current"))
+})
+
+test_that("asking for no database says that too, rather than nothing", {
+  withr::local_options(list(flowr.quiet = FALSE))
+  local_sigdb_cache()
+  expect_message(flowr:::.flowr_ensure_sigdb("9.9.9", quiet = FALSE, scopes = character(0)),
+                 "no signature database requested")
+})
