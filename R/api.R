@@ -404,9 +404,13 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
   res
 }
 
-# Per-character mask of the columns a slice contributes to. Whitespace-only gaps
-# between contributing tokens are healed back in: dimming a run of spaces shows
-# nothing but chops the line into extra escape sequences.
+# Per-character mask of the columns a slice contributes to. Connector-only gaps
+# between contributing tokens are healed back in: flowR's node ids cover names
+# and values but not the syntax joining them (e.g. `print(x)` covers "print"
+# and "x" but not the parens), so dimming a lone "(" between two covered tokens
+# would fragment a fully-contributing call for no reason. A gap heals only when
+# it has no identifier/value characters of its own, so a genuinely uncovered
+# statement (which always has some) is never swallowed.
 .flowr_contrib_mask <- function(text, ranges) {
   n <- nchar(text)
   if (n == 0L) return(logical(0))
@@ -416,7 +420,7 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
     e <- min(n, as.integer(r[2]))
     if (!is.na(s) && !is.na(e) && e >= s) m[s:e] <- TRUE
   }
-  ws <- strsplit(text, "", fixed = TRUE)[[1]] %in% c(" ", "\t")
+  connector <- !grepl("[A-Za-z0-9_]", strsplit(text, "", fixed = TRUE)[[1]])
   i <- 1L
   while (i <= n) {
     if (m[i]) {
@@ -425,7 +429,7 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
     }
     j <- i
     while (j < n && !m[j + 1L]) j <- j + 1L
-    if (all(ws[i:j])) m[i:j] <- TRUE
+    if (all(connector[i:j])) m[i:j] <- TRUE
     i <- j + 1L
   }
   m

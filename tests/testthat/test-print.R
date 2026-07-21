@@ -97,6 +97,16 @@ test_that("whitespace-only gaps between contributing tokens are not dimmed", {
   expect_equal(.flowr_contrib_mask("", list()), logical(0))
 })
 
+test_that("connector punctuation between contributing tokens is not dimmed", {
+  # "print" (1-5) and "x" (7) are covered but the call's parens are not
+  # themselves a node; a genuinely uncovered gap with real identifiers must
+  # still stay dimmed, so covering both cases here
+  m <- .flowr_contrib_mask("print(x)", list(c(1, 5), c(7, 7)))
+  expect_true(all(m))
+  m2 <- .flowr_contrib_mask("f(a, uncovered)", list(c(1, 3)))
+  expect_false(any(m2[5:15]))
+})
+
 test_that("styling merges dimming and underline without shifting columns", {
   expect_equal(.flowr_style_line("abc", c(TRUE, TRUE, TRUE), list(), TRUE), "abc")
   expect_equal(.flowr_style_line("abc", rep(TRUE, 3), list(c(2, 2)), TRUE),
