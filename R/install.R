@@ -44,7 +44,7 @@
 #' and `force = TRUE` re-fetches both. Remove the database with
 #' [flowr_uninstall()].
 #'
-#' @param version flowR version to install (default `"2.12.3"`).
+#' @param version flowR version to install (default `"2.13.1"`).
 #' @param engine `"binary"` (a self-contained executable, no Node/Docker needed),
 #'   `"node"` (the flowR npm package run with a system or private Node.js) or
 #'   `"docker"` (pull the flowR docker image).

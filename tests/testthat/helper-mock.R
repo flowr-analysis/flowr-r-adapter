@@ -43,6 +43,42 @@ local({
             "static-slice" = list(.meta = list(), results = list(
               q = list(slice = list(result = list(1, 2)),
                        reconstruct = list(code = "x <- 1")))))))
+        } else if ("signature" %in% qtypes) {
+          q <- req$query[[which(qtypes == "signature")[1]]]
+          if (identical(q$package, "*") && identical(q[["function"]], "mockfn")) {
+            send(con, list(type = "response-query", id = id, results = list(signature = list(
+              .meta = list(), databases = list(list(scope = "current", version = 1, date = "2026-01-01")),
+              packageCount = 1L, sourceCount = 1L,
+              matches = list(list(package = "mockpkg", name = "mockfn", exported = TRUE, version = "1.0.0"))))))
+          } else if (identical(q$package, "mockpkg") && identical(q[["function"]], "mockfn")) {
+            send(con, list(type = "response-query", id = id, results = list(signature = list(
+              .meta = list(), databases = list(list(scope = "current", version = 1, date = "2026-01-01")),
+              packageCount = 1L, sourceCount = 1L,
+              "function" = list(name = "mockfn", package = "mockpkg", version = "1.0.0",
+                                exported = TRUE, properties = list(),
+                                parameters = list(list(name = "x", required = TRUE, forced = FALSE)),
+                                callees = list())))))
+          } else if (identical(q$package, "totally_unknown_pkg")) {
+            # mirrors real flowR: message + packageCount, no `package` field
+            send(con, list(type = "response-query", id = id, results = list(signature = list(
+              .meta = list(), databases = list(list(scope = "current", version = 1, date = "2026-01-01")),
+              packageCount = 23765L, sourceCount = 1L,
+              message = "The signature database does not know the package \\"totally_unknown_pkg\\".",
+              suggestions = list()))))
+          } else {
+            send(con, list(type = "response-query", id = id, results = list(signature = list(
+              .meta = list(), databases = list(), packageCount = 0L, sourceCount = 0L))))
+          }
+        } else if ("guess-dep-versions" %in% qtypes) {
+          send(con, list(type = "response-query", id = id, results = list(
+            "guess-dep-versions" = list(
+              .meta = list(), rVersion = "4.5.0", runnableCombinations = 1, possibleCombinations = 1,
+              dependencies = list(list(
+                package = "mockpkg", base = FALSE, used = TRUE, range = "1.0.0",
+                minVersion = "1.0.0", maxVersion = "1.0.0", candidateCount = 1L, totalVersions = 1L,
+                candidates = list("1.0.0"),
+                evidence = list(list(source = "available", origin = "signature database",
+                                     detail = "data available from 1.0.0", bound = ">=1.0.0"))))))))
         } else {
           send(con, list(type = "response-query", id = id, results = list(
             dependencies = list(

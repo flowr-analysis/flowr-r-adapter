@@ -6,6 +6,21 @@
     all(vapply(items, function(it) is.list(it) && !is.null(it$nodeId), logical(1)))
 }
 
+# flowR's dataflow EdgeType bitmask, decoded to names (see dataflow/graph/edge.d.ts)
+.flowr_edge_type_bits <- c(
+  reads = 1L, "defined-by" = 2L, calls = 4L, returns = 8L,
+  "def-on-call" = 16L, "def-by-on-call" = 32L, arg = 64L,
+  "side-effect-on-call" = 128L, "non-standard-evaluation" = 256L
+)
+
+# A dataflow edge's `types` bitmask -> "reads,arg"-style comma-joined names.
+.flowr_decode_edge_type <- function(bits) {
+  if (is.null(bits)) return(NA_character_)
+  bits <- as.integer(bits)
+  names <- names(.flowr_edge_type_bits)[bitwAnd(bits, .flowr_edge_type_bits) != 0L]
+  if (length(names) == 0) as.character(bits) else paste(names, collapse = ",")
+}
+
 #' Turn a flowR graph into vertex and edge data frames
 #'
 #' **Experimental.** Runs the `dataflow` (or `call-graph`) query and returns the
@@ -42,7 +57,7 @@ flowr_graph <- function(code = NULL, file = NULL, folder = NULL,
       ty <- te[[2]]$types %||% te[[2]]$type
       from <- c(from, src)
       to <- c(to, as.character(te[[1]]))
-      etype <- c(etype, if (is.null(ty)) NA_character_ else paste(unlist(ty), collapse = ","))
+      etype <- c(etype, .flowr_decode_edge_type(ty))
     }
   }
   edges <- data.frame(from = from, to = to, type = etype, stringsAsFactors = FALSE)
@@ -196,7 +211,9 @@ print.flowr_overview <- function(x, color = .flowr_use_color(), ...) {
     return(invisible(x))
   }
   item_line <- function(it, indent) {
-    name <- paste0(strrep("  ", indent), it$name %||% it$value %||% it$functionName %||% "")
+    # `[[`: `$name` partial-matches `namespaceInfo` on library/require items
+    label_text <- it[["name"]] %||% it[["value"]] %||% it[["functionName"]] %||% ""
+    name <- paste0(strrep("  ", indent), label_text)
     ver <- if (!is.null(it$version) && !is.na(it$version)) it$version else ""
     tag <- if (nzchar(ver)) paste0("[pkg db: ", ver, "]") else ""
     visible <- nchar(name) + if (nzchar(tag)) nchar(tag) + 1L else 0L
@@ -215,8 +232,8 @@ print.flowr_overview <- function(x, color = .flowr_use_color(), ...) {
     # there is no function name, or when it is already the label shown (e.g. a
     # `geom_errorbar` item called via `geom_errorbar`). Keep the column width so
     # the criterion stays aligned across rows.
-    fn <- it$functionName %||% ""
-    show_via <- nzchar(fn) && !identical(fn, it$name %||% it$value %||% it$functionName %||% "")
+    fn <- it[["functionName"]] %||% ""
+    show_via <- nzchar(fn) && !identical(fn, label_text)
     via <- .flowr_ansi(if (show_via) sprintf("via %-12s", fn) else strrep(" ", 16L), "2", color)
     # link the function to its definition only if flowR gave us the location
     if (show_via && !is.null(it$definitionUrl) && nzchar(it$definitionUrl)) {

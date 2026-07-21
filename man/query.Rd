@@ -31,7 +31,9 @@ analysed together for a multi-file slice. Needs a real engine.}
 session is used when \code{NULL}. Pass an explicit one to work with several at once.}
 }
 \value{
-The query results, a named list keyed by query type.
+The query results, a named list keyed by query type. Printing caps
+long nested lists/vectors at a few dozen elements; the values themselves
+are untouched, only the console view.
 }
 \description{
 Sends one or more queries through flowR's Query API. \code{query} may be a
@@ -39,11 +41,13 @@ character vector of query type names (e.g. \code{"dependencies"}), a single quer
 object (a named list with a \code{type}), or a list of such objects.
 }
 \details{
-Supported query types in flowR 2.12.3 include \code{dependencies},
-\code{call-context}, \code{dataflow}, \code{df-shape}, \code{static-slice}, \code{id-map},
-\code{normalized-ast}, \code{linter}, \code{location-map}, \code{call-graph}, and more. Pass
-extra arguments by using the object form, e.g.
-\code{query(code, list(type = "static-slice", criteria = I("3@x")))}.
+Supported query types in flowR 2.13.1 include \code{dependencies},
+\code{call-context}, \code{dataflow}, \code{static-slice}, \code{id-map}, \code{normalized-ast},
+\code{linter}, \code{location-map}, \code{call-graph}, \code{absint} (abstract
+interpretation, e.g. \code{list(type = "absint", inference = "df-shape")} for
+data-frame shapes), \code{guess-dep-versions} (see \code{\link[=flowr_guess_versions]{flowr_guess_versions()}}),
+\code{signature} (see \code{\link[=flowr_help]{flowr_help()}}), and more. Pass extra arguments by using
+the object form, e.g. \code{query(code, list(type = "static-slice", criteria = I("3@x")))}.
 }
 \section{Analysing the current project}{
 
@@ -65,5 +69,5 @@ query("x <- 1\ncat(x)", c("dataflow", "id-map"))   # several at once
 }
 }
 \seealso{
-\code{\link[=flowr_overview]{flowr_overview()}}, \code{\link[=dataflow]{dataflow()}}
+\code{\link[=flowr_overview]{flowr_overview()}}, \code{\link[=dataflow]{dataflow()}}, \code{\link[=flowr_guess_versions]{flowr_guess_versions()}}, \code{\link[=flowr_help]{flowr_help()}}
 }

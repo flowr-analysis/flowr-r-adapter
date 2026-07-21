@@ -31,6 +31,14 @@ test_that("server error responses surface as R errors", {
   expect_error(flowr:::flowr_analyze(code = "ERR"), "boom")
 })
 
+test_that("empty code is rejected before it reaches flowR", {
+  srv <- mock_server_start()
+  on.exit(mock_server_stop(srv), add = TRUE)
+  s <- flowr:::.flowr_connect_to("127.0.0.1", srv$port)
+  on.exit(flowr_disconnect(s), add = TRUE)
+  expect_error(flowr:::flowr_analyze(code = ""), "must not be empty")
+})
+
 test_that("repeated ops reuse one cached analysis", {
   srv <- mock_server_start()
   on.exit(mock_server_stop(srv), add = TRUE)

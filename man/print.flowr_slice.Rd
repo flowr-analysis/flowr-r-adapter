@@ -18,7 +18,11 @@
 as red \code{-} removals and the kept lines as plain context. \code{"gray"}: the full
 original with non-slice lines dimmed. \code{"code"}: just the reconstructed
 slice. Defaults to the style chosen in \code{\link[=slice]{slice()}}, else
-\code{getOption("flowr.slice_style", "diff")}.}
+\code{getOption("flowr.slice_style", "diff")}.
+
+With colour on, \code{"diff"} and \code{"gray"} underline the tokens the criteria
+point at and dim the parts of a kept line that do not contribute, so
+\verb{a <- 1; b <- 2} sliced for \code{a} shows \verb{; b <- 2} dimmed.}
 
 \item{color}{Emit ANSI colour. Defaults to on for interactive terminals only;
 force with \code{color = TRUE}/\code{FALSE}, \code{options(flowr.color=)} or \code{NO_COLOR}.}

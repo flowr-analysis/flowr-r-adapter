@@ -15,3 +15,8 @@ flowr.Rcheck/
 # local rv activation (rv sync regenerates it); must not reach CI, where it would
 # point R at a missing rv library
 .Rprofile
+# npm install target for rebuilding inst/flowr-js (see MAINTAINING.md); never committed
+node_modules/
+package-lock.json
+# make sigdb's shard cache (tools/pack-sigdb.sh); never committed
+.sigdb-work/

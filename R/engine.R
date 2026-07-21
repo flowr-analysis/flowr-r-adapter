@@ -247,12 +247,9 @@
   }
   src <- .flowr_binary_source(version, plat$key)
   if (is.null(src$sha256) && isTRUE(flowr_option("secure"))) {
-    .flowr_stop("no verifiable flowR binary is available for ", plat$key, " / ", version,
-         " (the prebuilt binary may not be published yet).\n",
-         "You do not need it: use the shipped bundle instead - ",
-         "flowr_connect(engine = \"bundled\") (needs Node, no download). ",
-         "Or the Node engine (flowr_install(engine = \"node\")), ",
-         "or set options(flowr.secure = FALSE) to allow an unverified binary.")
+    .flowr_stop("no verifiable flowR binary for ", plat$key, " / ", version, ". Alternatives: ",
+         "flowr_connect(engine = \"bundled\"), flowr_install(engine = \"node\"), ",
+         "or options(flowr.secure = FALSE) to allow an unverified binary.")
   }
   dir <- .flowr_binary_dir(version, plat$key)
   dir.create(dir, recursive = TRUE, showWarnings = FALSE)

@@ -9,7 +9,7 @@
 
 .flowr_defaults <- list(
   engine          = "auto",        # auto | bundled | binary | node | docker
-  flowr_version   = "2.12.3",      # flowR release to obtain / image tag
+  flowr_version   = "2.13.1",      # flowR release to obtain / image tag
   flowr_engine    = "tree-sitter", # flowR parser engine: tree-sitter | r-shell
   host            = "127.0.0.1",
   port            = 1042L,          # used as-is for `remote`; a free port is

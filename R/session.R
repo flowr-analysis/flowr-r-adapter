@@ -16,7 +16,7 @@
 #' @param engine Which engine to use: `"auto"` (default), `"bundled"` (the flowR
 #'   JS+wasm shipped with the package, run on your Node), `"binary"`
 #'   (self-contained, no Node), `"node"` or `"docker"`.
-#' @param flowr_version flowR version to obtain (default `"2.12.3"`).
+#' @param flowr_version flowR version to obtain (default `"2.13.1"`).
 #' @param flowr_engine flowR parser engine, `"tree-sitter"` (default, needs no R)
 #'   or `"r-shell"` (reuses the R on your `PATH`).
 #' @param host,port Bind host (loopback) and preferred port for the spawned
@@ -205,6 +205,9 @@ flowr_analyze <- function(code = NULL, file = NULL, files = NULL, cfg = FALSE,
   session <- .flowr_resolve_session(session)
   if (is.null(code) && is.null(file) && is.null(files)) {
     .flowr_stop("provide `code`, `file` or `files`")
+  }
+  if (!is.null(code) && !nzchar(code)) {
+    .flowr_stop("`code` must not be empty")
   }
   paths <- if (!is.null(files)) normalizePath(files, mustWork = TRUE)
            else if (!is.null(file)) normalizePath(file, mustWork = TRUE)

@@ -54,7 +54,7 @@ or wrong key aborts the install.
 ## 2. Publish the native binaries for a flowR version
 
 Run the **build-flowr-binaries** GitHub Action (Actions tab -> Run workflow),
-entering the flowR version (default `2.12.3`). To the `flowr-v<version>` release
+entering the flowR version (default `2.13.1`). To the `flowr-v<version>` release
 it uploads, each with a `.sha256` and (if the secret is set) a `.sig`:
 
 * `flowr-<version>-<os>-<arch>.tar.gz` — a self-contained binary per platform

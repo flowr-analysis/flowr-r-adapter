@@ -334,14 +334,13 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
 
 # 1-based, per-line inclusive column ranges of the tokens each criterion points
 # to, so the slice printer can underline them.
-.flowr_underline_ranges <- function(x, lines) {
+.flowr_underline_ranges <- function(x, lines, loc_map = NULL) {
   res <- list()
   add <- function(line, start, end) {
     if (line >= 1 && line <= length(lines) && end >= start) {
       res[[as.character(line)]] <<- c(res[[as.character(line)]], list(c(start, end)))
     }
   }
-  loc_map <- NULL
   for (cr in trimws(as.character(x$criteria))) {
     if (grepl("^[0-9]+@", cr)) {                         # line@variable
       l <- as.integer(sub("@.*$", "", cr))
@@ -372,6 +371,95 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
   res
 }
 
+# 1-based, per-line inclusive column ranges the sliced nodes actually cover. A
+# line survives slicing if any node touches it, so `a <- 1; b <- 2` is kept whole
+# when only the first statement contributes; the ranges let the printer dim the
+# rest instead of implying all of it made the slice.
+.flowr_covered_ranges <- function(ids, loc_map, lines) {
+  res <- list()
+  add <- function(line, start, end) {
+    if (line >= 1L && line <= length(lines) && end >= start) {
+      res[[as.character(line)]] <<- c(res[[as.character(line)]], list(c(start, end)))
+    }
+  }
+  for (id in ids) {
+    loc <- loc_map[[paste0(id)]]
+    if (is.null(loc) || length(loc) < 4) next
+    p <- suppressWarnings(as.integer(unlist(loc)[1:4]))
+    if (anyNA(p)) next
+    if (p[1] == p[3]) {
+      add(p[1], p[2], p[4])
+      next
+    }
+    # A node spanning lines covers the rest of its first line, every line in
+    # between, and its last line up to the closing column.
+    if (p[1] >= 1L && p[1] <= length(lines)) add(p[1], p[2], nchar(lines[[p[1]]]))
+    if (p[3] > p[1] + 1L) {
+      for (l in (p[1] + 1L):(p[3] - 1L)) {
+        if (l >= 1L && l <= length(lines)) add(l, 1L, nchar(lines[[l]]))
+      }
+    }
+    add(p[3], 1L, p[4])
+  }
+  res
+}
+
+# Per-character mask of the columns a slice contributes to. Whitespace-only gaps
+# between contributing tokens are healed back in: dimming a run of spaces shows
+# nothing but chops the line into extra escape sequences.
+.flowr_contrib_mask <- function(text, ranges) {
+  n <- nchar(text)
+  if (n == 0L) return(logical(0))
+  m <- logical(n)
+  for (r in ranges) {
+    s <- max(1L, as.integer(r[1]))
+    e <- min(n, as.integer(r[2]))
+    if (!is.na(s) && !is.na(e) && e >= s) m[s:e] <- TRUE
+  }
+  ws <- strsplit(text, "", fixed = TRUE)[[1]] %in% c(" ", "\t")
+  i <- 1L
+  while (i <= n) {
+    if (m[i]) {
+      i <- i + 1L
+      next
+    }
+    j <- i
+    while (j < n && !m[j + 1L]) j <- j + 1L
+    if (all(ws[i:j])) m[i:j] <- TRUE
+    i <- j + 1L
+  }
+  m
+}
+
+# Render one line: dim the columns the slice does not contribute to, underline
+# the criterion tokens, in one pass so the two cannot shift each other's columns.
+.flowr_style_line <- function(text, contrib, ul, color) {
+  n <- nchar(text)
+  if (!isTRUE(color) || n == 0L) return(text)
+  under <- logical(n)
+  for (r in ul) {
+    s <- max(1L, as.integer(r[1]))
+    e <- min(n, as.integer(r[2]))
+    if (!is.na(s) && !is.na(e) && e >= s) under[s:e] <- TRUE
+  }
+  if (length(contrib) != n) contrib <- rep(TRUE, n)
+  out <- ""
+  i <- 1L
+  while (i <= n) {
+    j <- i
+    while (j < n && contrib[j + 1L] == contrib[i] && under[j + 1L] == under[i]) j <- j + 1L
+    seg <- substr(text, i, j)
+    codes <- c(if (!contrib[i]) "90", if (under[i]) "4")
+    out <- paste0(out, if (length(codes) > 0) {
+      paste0("\x1b[", paste(codes, collapse = ";"), "m", seg, "\x1b[0m")
+    } else {
+      seg
+    })
+    i <- j + 1L
+  }
+  out
+}
+
 # Wrap the given column ranges of `text` in ANSI underline.
 .flowr_apply_underline <- function(text, ranges) {
   ranges <- ranges[order(vapply(ranges, `[`, numeric(1), 1))]
@@ -395,6 +483,10 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
 #'   original with non-slice lines dimmed. `"code"`: just the reconstructed
 #'   slice. Defaults to the style chosen in [slice()], else
 #'   `getOption("flowr.slice_style", "diff")`.
+#'
+#'   With colour on, `"diff"` and `"gray"` underline the tokens the criteria
+#'   point at and dim the parts of a kept line that do not contribute, so
+#'   `a <- 1; b <- 2` sliced for `a` shows `; b <- 2` dimmed.
 #' @param color Emit ANSI colour. Defaults to on for interactive terminals only;
 #'   force with `color = TRUE`/`FALSE`, `options(flowr.color=)` or `NO_COLOR`.
 #' @param ... Ignored.
@@ -417,19 +509,29 @@ print.flowr_slice <- function(x, style = x$style %||% getOption("flowr.slice_sty
                     paste(x$criteria, collapse = ", "), x$direction,
                     sum(keep), length(lines), pct)
   cat(.flowr_ansi(header, "1", color), "\n", sep = "")
-  ul <- if (isTRUE(color)) .flowr_underline_ranges(x, lines) else list()
+  loc_map <- if (isTRUE(color)) {
+    tryCatch(make_id_to_location_map(x$analysis$results$normalize$ast),
+             error = function(e) list())
+  } else {
+    list()
+  }
+  ul <- if (isTRUE(color)) .flowr_underline_ranges(x, lines, loc_map) else list()
+  cov <- if (isTRUE(color)) .flowr_covered_ranges(x$ids, loc_map, lines) else list()
   for (i in seq_along(lines)) {
     txt <- lines[[i]]
-    rng <- ul[[as.character(i)]]
-    if (!is.null(rng)) {
-      txt <- .flowr_apply_underline(txt, rng)   # underline the criterion token
-    }
+    rng <- ul[[as.character(i)]] %||% list()
+    cr <- cov[[as.character(i)]]
+    # A kept line we have no columns for stays fully lit: better to under-report
+    # the dimming than to gray out a line that is in the slice.
+    contrib <- if (is.null(cr)) rep(TRUE, nchar(txt)) else .flowr_contrib_mask(txt, cr)
     if (style == "gray") {
-      cat(if (keep[i]) txt else .flowr_ansi(txt, "90", color), "\n", sep = "")
+      if (!keep[i]) contrib <- logical(nchar(txt))
+      cat(.flowr_style_line(txt, contrib, rng, color), "\n", sep = "")
     } else if (keep[i]) {
-      cat("  ", txt, "\n", sep = "")                              # context
+      cat("  ", .flowr_style_line(txt, contrib, rng, color), "\n", sep = "")   # context
     } else {
-      cat(.flowr_ansi(paste0("- ", txt), "31", color), "\n", sep = "")  # removed
+      txt <- .flowr_apply_underline(txt, rng)
+      cat(.flowr_ansi(paste0("- ", txt), "31", color), "\n", sep = "")         # removed
     }
   }
   invisible(x)
@@ -443,13 +545,17 @@ print.flowr_slice <- function(x, style = x$style %||% getOption("flowr.slice_sty
 #'
 #' @inheritParams slice
 #' @param query The query or queries to run. See *Details* for the shape.
-#' @return The query results, a named list keyed by query type.
-#' @details Supported query types in flowR 2.12.3 include `dependencies`,
-#'   `call-context`, `dataflow`, `df-shape`, `static-slice`, `id-map`,
-#'   `normalized-ast`, `linter`, `location-map`, `call-graph`, and more. Pass
-#'   extra arguments by using the object form, e.g.
-#'   `query(code, list(type = "static-slice", criteria = I("3@x")))`.
-#' @seealso [flowr_overview()], [dataflow()]
+#' @return The query results, a named list keyed by query type. Printing caps
+#'   long nested lists/vectors at a few dozen elements; the values themselves
+#'   are untouched, only the console view.
+#' @details Supported query types in flowR 2.13.1 include `dependencies`,
+#'   `call-context`, `dataflow`, `static-slice`, `id-map`, `normalized-ast`,
+#'   `linter`, `location-map`, `call-graph`, `absint` (abstract
+#'   interpretation, e.g. `list(type = "absint", inference = "df-shape")` for
+#'   data-frame shapes), `guess-dep-versions` (see [flowr_guess_versions()]),
+#'   `signature` (see [flowr_help()]), and more. Pass extra arguments by using
+#'   the object form, e.g. `query(code, list(type = "static-slice", criteria = I("3@x")))`.
+#' @seealso [flowr_overview()], [dataflow()], [flowr_guess_versions()], [flowr_help()]
 #' @inheritSection slice Analysing the current project
 #' @export
 #' @examples
@@ -468,7 +574,54 @@ query <- function(code = NULL, query, file = NULL, folder = NULL, cfg = FALSE, s
   )
   res <- .flowr_request(session$con, req)
   .flowr_timing_detail(.flowr_analysis_phases(an$analysis))
-  res$results
+  .flowr_query_tag(res$results)
+}
+
+# How many elements of a nested list/vector print() shows before a "... N
+# more" note; the full value is unaffected, only the console rendering caps.
+.flowr_query_print_limit <- 20L
+
+# Tag results and each per-type entry so truncated printing applies whether a
+# caller prints query(...) directly or query(...)$<type> after unwrapping.
+.flowr_query_tag <- function(results) {
+  tagged <- lapply(results, function(r) {
+    if (is.list(r)) structure(r, class = "flowr_query_result") else r
+  })
+  structure(tagged, class = "flowr_query_result")
+}
+
+# Total nodes rendered across a whole print(), on top of the per-list cap --
+# some results (e.g. a call-graph's per-vertex environment chains) are narrow
+# but deep or repeated, so a sibling-count cap alone still prints thousands
+# of lines.
+.flowr_query_print_budget <- 300L
+
+# Cap list/vector length at `limit` and total nodes at `budget`, replacing
+# what's cut with "... N more" / "... truncated (output too large)".
+.flowr_query_truncate <- function(x, limit = .flowr_query_print_limit,
+                                  budget = .flowr_query_print_budget) {
+  spent <- 0L
+  step <- function(v) {
+    if (spent >= budget) return("... truncated (output too large)")
+    spent <<- spent + 1L
+    if (is.list(v)) {
+      n <- length(v)
+      shown <- lapply(v[seq_len(min(n, limit))], step)
+      if (n > limit) shown <- c(shown, list(sprintf("... %d more", n - limit)))
+      shown
+    } else if (is.atomic(v) && length(v) > limit) {
+      c(v[seq_len(limit)], sprintf("... %d more", length(v) - limit))
+    } else {
+      v
+    }
+  }
+  step(x)
+}
+
+#' @export
+print.flowr_query_result <- function(x, ...) {
+  print(.flowr_query_truncate(unclass(x)), ...)
+  invisible(x)
 }
 
 # Accept "type", c("a","b"), list(type=..), or list(list(type=..), ..).
@@ -582,8 +735,9 @@ print.flowr_project <- function(x, color = .flowr_use_color(), ...) {
       cat(.flowr_ansi("dependencies", "1", color), "\n", sep = "")
       for (s in segs) {
         items <- ov[[s]]
+        # `[[`: `$name` partial-matches `namespaceInfo` on library/require items
         nm <- vapply(items, function(it)
-          as.character(it$name %||% it$value %||% it$functionName %||% "?"), character(1))
+          as.character(it[["name"]] %||% it[["value"]] %||% it[["functionName"]] %||% "?"), character(1))
         u <- unique(nm)
         shown <- paste(utils::head(u, 6L), collapse = ", ")
         if (length(u) > 6L) shown <- paste0(shown, ", ...")

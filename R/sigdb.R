@@ -98,18 +98,89 @@
   list(url = url, sha256 = sha, sig = paste0(url, ".sig"))
 }
 
+# flowR ships its own sigdb release pointer (sigdb.remote.json, inside the npm
+# package), naming the GitHub release and a sha256 per shard -- the same source
+# tools/pack-sigdb.sh reads to build our release assets. Fetched here directly
+# so a version we haven't (yet) republished under our own repo still installs.
+.flowr_sigdb_upstream_pointer <- function(version) {
+  meta <- tryCatch(
+    suppressWarnings(jsonlite::fromJSON(
+      sprintf("https://registry.npmjs.org/@eagleoutice/flowr/%s", version),
+      simplifyVector = FALSE)),
+    error = function(e) NULL)
+  tgz <- meta$dist$tarball
+  if (is.null(tgz)) return(NULL)
+  tmp <- tempfile(fileext = ".tgz")
+  on.exit(unlink(tmp), add = TRUE)
+  ok <- tryCatch({
+    suppressWarnings(utils::download.file(tgz, tmp, mode = "wb", quiet = TRUE))
+    file.exists(tmp) && file.info(tmp)$size > 0
+  }, error = function(e) FALSE)
+  if (!isTRUE(ok)) return(NULL)
+  exdir <- tempfile("sigdb-ptr")
+  on.exit(unlink(exdir, recursive = TRUE), add = TRUE)
+  ptr_file <- file.path(exdir, "package", "data", "sigdb", "sigdb.remote.json")
+  ok2 <- tryCatch({
+    utils::untar(tmp, files = "package/data/sigdb/sigdb.remote.json", exdir = exdir)
+    file.exists(ptr_file)
+  }, error = function(e) FALSE)
+  if (!isTRUE(ok2)) return(NULL)
+  ptr <- tryCatch(jsonlite::fromJSON(ptr_file, simplifyVector = FALSE), error = function(e) NULL)
+  if (is.null(ptr$tag) || is.null(ptr$shards)) return(NULL)
+  ptr
+}
+
+# Fetch one scope straight from flowR's own upstream release named in its
+# pointer, verified against the sha256 it ships -- no untar needed, upstream's
+# shard filenames already match what the sigdb directory expects. This is not
+# signed with our pinned key (it isn't ours to sign), so it is always reported
+# as checksum-level, independent of secure mode: the checksum comes from
+# flowR's own npm package (fetched over the registry's TLS), not an
+# unauthenticated sidecar next to the same asset, so it stands on its own
+# rather than as a downgrade of our own release's signature guarantee.
+.flowr_install_sigdb_scope_upstream <- function(version, scope, quiet) {
+  ptr <- .flowr_sigdb_upstream_pointer(version)
+  if (is.null(ptr)) {
+    .flowr_stop("no verifiable \"", scope, "\" signature database is available for flowR ",
+         version, " (published neither for this adapter nor found upstream). ",
+         "Set options(flowr.sigdb = \"none\") to stop trying.")
+  }
+  shards <- Filter(function(n) startsWith(n, paste0(scope, ".")) && endsWith(n, ".br"),
+                   names(ptr$shards))
+  if (length(shards) == 0) {
+    .flowr_stop("flowR's upstream sigdb release has no \"", scope, "\" shards")
+  }
+  dir <- .flowr_sigdb_dir(version)
+  dir.create(dir, recursive = TRUE, showWarnings = FALSE)
+  if (!quiet) {
+    message("[flowr] downloading the \"", scope, "\" signature database for flowR ", version)
+    message("[flowr]   from ", ptr$repo, " @ ", ptr$tag, " (flowR's own upstream release)")
+  }
+  unlink(Sys.glob(file.path(dir, paste0(scope, ".*"))))
+  for (name in shards) {
+    url <- sprintf("https://github.com/%s/releases/download/%s/%s", ptr$repo, ptr$tag, name)
+    .flowr_download_verify(url, ptr$shards[[name]]$sha256, file.path(dir, name), quiet = quiet,
+                           on_missing = paste0("could not download \"", name, "\" from\n  ", url))
+  }
+  if (!scope %in% .flowr_sigdb_scopes_installed(version)) {
+    unlink(Sys.glob(file.path(dir, paste0(scope, ".*"))))
+    .flowr_stop("the downloaded \"", scope, "\" signature database contains no ",
+         "manifest; it is not usable and has been discarded.")
+  }
+  writeLines("checksum", file.path(dir, paste0(scope, ".VERIFICATION")))
+  invisible("checksum")
+}
+
 # Download + verify + unpack one set into the shared directory. Verification is
 # the binaries' path exactly: a mandatory checksum, plus a signature against the
 # pinned key that secure mode makes non-optional. A tampered database would
 # mis-resolve every library() call, so it is held to the same bar as an executable.
 .flowr_install_sigdb_scope <- function(version, scope, quiet) {
   src <- .flowr_sigdb_source(version, scope)
-  if (is.null(src$sha256) && isTRUE(flowr_option("secure"))) {
-    .flowr_stop("no verifiable \"", scope, "\" signature database is available for flowR ",
-         version, " (it may not be published yet).\n",
-         "flowR analyses without a database, it just cannot resolve library() ",
-         "exports. Set options(flowr.sigdb = \"none\") to stop trying, or ",
-         "options(flowr.secure = FALSE) to allow an unverified download.")
+  if (is.null(src$sha256)) {
+    # not published under our own repo (yet) -- flowR already ships this data
+    # itself, checksummed; fetch it from there instead of failing
+    return(.flowr_install_sigdb_scope_upstream(version, scope, quiet))
   }
   dir <- .flowr_sigdb_dir(version)
   dir.create(dir, recursive = TRUE, showWarnings = FALSE)
@@ -123,8 +194,7 @@
     src$url, src$sha256, archive, quiet = quiet,
     on_missing = paste0(
       "could not download the \"", scope, "\" signature database from\n  ", src$url,
-      "\n(it may not be published for flowR ", version, " yet). flowR still ",
-      "analyses without it; it just cannot resolve library() exports.")
+      "\n(it may not be published for flowR ", version, " yet).")
   )
   if (isTRUE(flowr_option("verify_signature")) || isTRUE(flowr_option("secure"))) {
     sig <- .flowr_verify_signature(archive, src$sig, what = "flowR signature database")
@@ -198,8 +268,7 @@
   message("flowR resolves library()/:: exports from a signature database:\n",
           "  1: current  ~24 MB  base R + every current CRAN package (default)\n",
           "  2: all      ~59 MB  ... and every past package version\n",
-          "  3: none             skip it; flowR still analyses code, it just\n",
-          "                      leaves package exports unresolved")
+          "  3: none             skip it")
   ans <- tolower(trimws(.flowr_readline("Download which? [1/2/3, default 1] ")))
   if (!nzchar(ans)) {
     ans <- "1"                                  # a bare Enter takes the default

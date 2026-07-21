@@ -19,3 +19,6 @@
 ^inst/flowr-manifest\.json\.orig$
 ^flowr-.*\.tar\.gz.*$
 ^flowr\.Rcheck$
+^node_modules$
+^package-lock\.json$
+^\.sigdb-work$

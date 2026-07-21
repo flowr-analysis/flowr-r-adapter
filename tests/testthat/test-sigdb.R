@@ -101,15 +101,41 @@ test_that("an archive without a manifest is discarded rather than half-mounted",
   expect_false(flowr:::.flowr_sigdb_installed("9.9.9"))
 })
 
-test_that("secure mode refuses a sigdb that has no published checksum", {
+test_that("no checksum from our own repo AND no upstream pointer refuses the install", {
   withr::local_options(list(flowr.secure = TRUE))
   local_sigdb_cache()
   local_sigdb_source(local_sigdb_archive(), sha256 = NULL)
-  # the resolver found no checksum sidecar
+  # neither the resolver nor flowR's own upstream release has this version
   testthat::local_mocked_bindings(
-    .flowr_sigdb_source = function(version, scope) list(url = "file:///nope.tar.gz", sha256 = NULL, sig = NULL)
+    .flowr_sigdb_source = function(version, scope) list(url = "file:///nope.tar.gz", sha256 = NULL, sig = NULL),
+    .flowr_sigdb_upstream_pointer = function(version) NULL
   )
   expect_error(flowr:::.flowr_install_sigdb_scope("9.9.9", "current", quiet = TRUE), "no verifiable")
+})
+
+test_that("no checksum from our own repo falls back to flowR's upstream release", {
+  withr::local_options(list(flowr.secure = TRUE))
+  cache <- local_sigdb_cache()
+  # a shard payload with a real manifest, served from a fake "upstream" pointer
+  shard_dir <- withr::local_tempdir()
+  writeLines("{}", file.path(shard_dir, "current.manifest.json.br"))
+  writeLines("payload", file.path(shard_dir, "current.dict.sigs.ndjson.br"))
+  ptr <- list(
+    repo = "file://not-used", tag = "v0.0.0",
+    shards = list(
+      "current.manifest.json.br" = list(sha256 = flowr:::.flowr_sha256(file.path(shard_dir, "current.manifest.json.br"))),
+      "current.dict.sigs.ndjson.br" = list(sha256 = flowr:::.flowr_sha256(file.path(shard_dir, "current.dict.sigs.ndjson.br")))
+    )
+  )
+  testthat::local_mocked_bindings(
+    .flowr_sigdb_source = function(version, scope) list(url = "file:///nope.tar.gz", sha256 = NULL, sig = NULL),
+    .flowr_sigdb_upstream_pointer = function(version) ptr,
+    .flowr_download_verify = function(url, sha256, dest, ...) file.copy(file.path(shard_dir, basename(url)), dest)
+  )
+  level <- flowr:::.flowr_install_sigdb_scope("9.9.9", "current", quiet = TRUE)
+  expect_identical(level, "checksum")
+  expect_true(flowr:::.flowr_sigdb_installed("9.9.9"))
+  expect_identical(flowr:::.flowr_sigdb_verification("9.9.9"), "checksum")
 })
 
 test_that(".flowr_with_sigdb mounts for the child and restores the environment", {

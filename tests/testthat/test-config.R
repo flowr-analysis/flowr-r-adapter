@@ -3,7 +3,7 @@
 test_that("option resolution follows arg > option > env > default", {
   withr::local_options(list(flowr.flowr_version = NULL))
   withr::local_envvar(c(FLOWR_FLOWR_VERSION = NA))
-  expect_identical(flowr:::flowr_option("flowr_version"), "2.12.3") # default
+  expect_identical(flowr:::flowr_option("flowr_version"), "2.13.1") # default
 
   withr::local_envvar(c(FLOWR_FLOWR_VERSION = "9.9.9"))
   expect_identical(flowr:::flowr_option("flowr_version"), "9.9.9")  # env beats default

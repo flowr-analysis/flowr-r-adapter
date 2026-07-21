@@ -33,6 +33,11 @@
   database set, `flowr_uninstall(sigdb = "none")` removes only the engines. The
   default still removes everything, and `version = NULL` now applies the
   selection across every cached version.
+* Printing a slice in colour now dims the parts of a *kept* line that do not
+  contribute to it. A line survives slicing if any node touches it, so
+  `a <- 1; b <- 2` sliced for `a` used to be shown whole, implying all of it was
+  in the slice; `; b <- 2` is now dimmed. This applies to both `"diff"` and
+  `"gray"`, which also underline the tokens the criteria point at.
 * `slice()` gains two flowR 2.12 options. `include_callees = TRUE` continues a
   backward slice past a function-definition boundary, also pulling in the
   definition's binding and call sites (flowR ignores it for forward slices, so
@@ -40,6 +45,41 @@
   `inline_sources = TRUE` inlines resolvable `source()` calls so the slice is a
   single self-contained script; calls that are cyclic or unresolvable are kept
   verbatim and reported in the new `inline_warnings` element.
+* Targets flowR 2.13.1 (from 2.12.3); the shipped `inst/flowr-js` bundle is
+  rebuilt accordingly. flowR 2.13's proper version-guessing solver and richer
+  signature database (now tracking S3/S4 class ownership, so a package used
+  only via a registered S3 method still counts as used) are exposed through
+  the two new functions below.
+* New `flowr_guess_versions()` wraps flowR's `guess-dep-versions` query: guesses
+  the version range every dependency of a project must satisfy by combining
+  declared constraints (`DESCRIPTION`, lockfiles, transitive requirements) with
+  what the code actually calls, matched against the signature database (a
+  parameter a function only gained in some version raises the lower bound).
+  Returns a `flowr_guess` --- one row per dependency (`range`, `min_version`,
+  `max_version`, `candidates`, `evidence`, ...) --- with a print method showing
+  a runnable sample and linked package groups. `clean = TRUE` ignores declared
+  constraints and guesses purely from usage; `date` caps candidates to
+  releases available at a point in time; `explode = TRUE` produces concrete
+  per-dependency version assignments; `disable_evidence` (flowR 2.13.1) drops
+  individual evidence sources (e.g. `"signature"`) from consideration
+  entirely. Needs the signature database installed (`flowr_install()`).
+* New `flowr_help()` looks up a function the way `?fun`/`help()` does, but for
+  any CRAN package --- installed or not --- straight from the signature
+  database: parameters with defaults, exported/deprecated status, S3 dispatch,
+  source location and rdrr.io/CRAN-mirror documentation links. An unqualified
+  topic (`flowr_help("pivot_longer")`) is searched across every package like
+  `help()` searches the attached library, resolving to the one hit or listing
+  several like `apropos()`; `flowr_help(package = "dplyr")` gives a package
+  overview. Needs the signature database installed; errors with that hint
+  otherwise.
+* The signature database now falls back to flowR's own upstream release (named
+  in the `sigdb.remote.json` it ships) when the requested version has not been
+  republished under this adapter's own releases yet --- flowR does not cut a
+  new sigdb release for every version, so this is the common case, not an edge
+  case. Verified against the sha256 flowR itself publishes; reported as
+  checksum-level (flowR's release cannot carry this adapter's signature).
+  Native binaries still need this adapter's own release, published separately
+  (see `MAINTAINING.md`).
 
 # flowr 0.2.7
 
