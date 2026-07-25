@@ -25,6 +25,8 @@
 * `flowr_locations()` keeps its shape (a named list) but is now ordered by node
   id.
 
+# flowr 0.2.10
+
 # flowr 0.2.9
 
 # flowr 0.2.8
