@@ -9,15 +9,31 @@
 
 .flowr_defaults <- list(
   engine          = "auto",        # auto | bundled | binary | node | docker
-  flowr_version   = "2.13.1",      # flowR release to obtain / image tag
+  flowr_version   = "2.13.3",      # flowR release to obtain / image tag
   flowr_engine    = "tree-sitter", # flowR parser engine: tree-sitter | r-shell
   host            = "127.0.0.1",
   port            = 1042L,          # used as-is for `remote`; a free port is
                                     # picked automatically for spawned servers
   ws              = FALSE,          # use a WebSocket instead of raw TCP
   connect_timeout = 30,             # seconds to wait for a spawned server
-  request_timeout = 120,            # seconds to wait for a single response
+  request_timeout = 120,            # seconds to wait without any reply data
+  timeout_per_mb  = 60,             # added to request_timeout per MB of input,
+                                    # so analysing a large project is not cut
+                                    # off by a limit sized for a single script
   cache_size      = 32L,            # max analyses cached per session (bounded)
+  max_files       = 5000L,          # refuse to send more than this many files in
+                                    # one analysis (0 = no limit); guards against
+                                    # pointing flowr at a huge tree by accident
+  # Directories skipped when a *folder* is analysed: vendored libraries, build
+  # output and VCS metadata hold code the user did not write. A real project
+  # keeps thousands of .R files under renv/library alone, and analysing them
+  # turns a few-second run into a multi-minute one for no benefit. Entries match
+  # a whole path component, or a "a/b" pair of consecutive ones; anything ending
+  # in .Rcheck is always skipped. Set to character(0) to analyse everything.
+  skip_dirs       = c(".git", ".svn", ".hg", ".Rproj.user", "node_modules",
+                      "renv/library", "renv/staging", "renv/local", "renv/sandbox",
+                      "packrat/lib", "packrat/lib-R", "packrat/lib-ext",
+                      "packrat/src", "revdep", ".venv", "__pycache__"),
   binary_repo     = "flowr-analysis/flowr-r-adapter", # host of binary releases
   docker_image    = "eagleoutice/flowr",
   secure          = TRUE,           # hardened mode (default): tree-sitter only,
@@ -184,9 +200,9 @@ flowr_config_file <- function() {
 .flowr_config_groups <- list(
   general = c("engine", "flowr_version", "flowr_engine", "secure", "verify_signature"),
   server  = c("host", "port", "ws", "connect_timeout", "request_timeout",
-              "docker_image", "binary_repo"),
-  runtime = c("cache_size", "progress", "message_limit", "timing", "verbose",
-              "quiet", "debug", "lint_rules", "lint_max")
+              "timeout_per_mb", "docker_image", "binary_repo"),
+  runtime = c("cache_size", "max_files", "skip_dirs", "progress", "message_limit",
+              "timing", "verbose", "quiet", "debug", "lint_rules", "lint_max")
 )
 
 #' Inspect the effective flowr configuration

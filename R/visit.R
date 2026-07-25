@@ -111,14 +111,25 @@ visit_node <- function(node, callback) {
 #' @param ast The node or AST root to visit
 #'
 #' @return The ID-to-location map, where the keys are the node IDs and the values are the locations of the nodes.
+#'   Indexed with `[[`, exactly like the named list it used to be.
 #'
 #' @noRd
 make_id_to_location_map <- function(ast) {
-  id_to_location_map <- list()
+  # An environment, not a list: growing a named list one element at a time copies
+  # the whole list on every insert (quadratic), and looking a name up in it is a
+  # linear scan. Both are fine for a toy script and hopeless for a project with
+  # hundreds of thousands of AST nodes. An environment inserts and looks up in
+  # constant time, and `map[["id"]]` still returns NULL for a missing key.
+  map <- .flowr_new_map()
   visit_node(ast, function(node) {
     if (!is.null(node$location)) {
-      id_to_location_map[paste0(node$info$id)] <<- list(node$location)
+      map[[paste0(node$info$id)]] <- node$location
     }
+    TRUE
   })
-  return(id_to_location_map)
+  map
 }
+
+#' An empty node-id keyed map (see make_id_to_location_map).
+#' @noRd
+.flowr_new_map <- function() new.env(parent = emptyenv())

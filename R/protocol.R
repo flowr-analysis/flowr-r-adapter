@@ -24,10 +24,35 @@
   r <- reg[[key]]
   if (is.null(r)) {
     r <- new.env(parent = emptyenv())
-    r$buf <- raw(0)
     reg[[key]] <- r
   }
-  r
+  .flowr_reader_init(r)
+}
+
+# A reader holds
+#   buf/off        the contiguous bytes we have already joined, and how many of
+#                  them are consumed (an offset instead of trimming the front,
+#                  so draining many messages out of one buffer stays linear),
+#   nl/nl_i        the newline positions inside `buf` and the next unconsumed
+#                  one (found once, never re-scanned),
+#   pending/…      raw chunks straight off the socket that have not been joined
+#                  yet, with the newline offsets found in each as it arrived.
+# Everything here exists so that reading an N-byte reply costs O(N): the old
+# reader re-concatenated and re-scanned the whole buffer on every socket read,
+# which is quadratic and falls over on the tens of megabytes a real project's
+# analysis produces.
+.flowr_reader_init <- function(reader) {
+  if (is.null(reader$nl)) {
+    b <- reader$buf %||% raw(0)
+    reader$buf <- b
+    reader$off <- 0L
+    reader$nl <- which(b == as.raw(0x0a))
+    reader$nl_i <- 1L
+    reader$pending <- list()
+    reader$pending_nl <- list()
+    reader$has_nl <- FALSE
+  }
+  reader
 }
 
 .flowr_reader_drop <- function(con) {
@@ -64,51 +89,130 @@
        rest = if (end < length(buf)) buf[-seq_len(end)] else raw(0))
 }
 
+# How much we take off the socket in one go.
+.flowr_read_chunk_size <- 4194304L
+
+# Fold the pending chunks into the contiguous buffer, dropping the already
+# consumed prefix. Called only once a newline is known to be somewhere in the
+# pending chunks, so the buffer is rebuilt once per *message*, not once per read.
+.flowr_reader_compact <- function(reader) {
+  buf <- reader$buf
+  off <- reader$off
+  kept <- if (off < length(buf)) buf[(off + 1L):length(buf)] else raw(0)
+  chunks <- reader$pending
+  # `kept` holds no unconsumed newline (we only get here once nl is exhausted),
+  # so the joined newline positions are just the per-chunk ones, shifted
+  nl <- vector("list", length(chunks))
+  base <- length(kept)
+  for (i in seq_along(chunks)) {
+    p <- reader$pending_nl[[i]]
+    if (length(p) > 0) {
+      nl[[i]] <- p + base
+    }
+    base <- base + length(chunks[[i]])
+  }
+  reader$buf <- unlist(c(list(kept), chunks), use.names = FALSE)
+  reader$off <- 0L
+  reader$nl <- unlist(nl, use.names = FALSE) %||% integer(0)
+  reader$nl_i <- 1L
+  reader$pending <- list()
+  reader$pending_nl <- list()
+  reader$has_nl <- FALSE
+  invisible(NULL)
+}
+
+# R caps a single string at 2^31-1 bytes; say so plainly instead of letting
+# rawToChar() fail with "long vectors not supported".
+.flowr_raw_to_string <- function(bytes) {
+  if (length(bytes) >= 2147483647) {
+    .flowr_stop("flowR sent a ", round(length(bytes) / 1048576),
+                " MB message, which is past R's 2 GB limit for a single string; ",
+                "analyse fewer files per call")
+  }
+  rawToChar(bytes)
+}
+
+# Pop the next complete message out of the reader, or NULL if we need more bytes.
+.flowr_reader_take <- function(reader) {
+  if (reader$nl_i > length(reader$nl)) {
+    if (!isTRUE(reader$has_nl)) {
+      return(NULL)
+    }
+    .flowr_reader_compact(reader)
+    if (reader$nl_i > length(reader$nl)) {
+      return(NULL)
+    }
+  }
+  end <- reader$nl[[reader$nl_i]]
+  reader$nl_i <- reader$nl_i + 1L
+  line <- if (end > reader$off + 1L) reader$buf[(reader$off + 1L):(end - 1L)] else raw(0)
+  reader$off <- end
+  if (length(line) > 0 && line[[length(line)]] == as.raw(0x0d)) {
+    line <- line[-length(line)]
+  }
+  # release a fully drained buffer at once, so a multi-MB reply does not stay
+  # resident for the rest of the session
+  if (reader$nl_i > length(reader$nl) && reader$off >= length(reader$buf)) {
+    reader$buf <- raw(0)
+    reader$off <- 0L
+    reader$nl <- integer(0)
+    reader$nl_i <- 1L
+  }
+  .flowr_raw_to_string(line)
+}
+
+# `timeout` is a *no-progress* timeout: it bounds how long we wait without any
+# new bytes, not how long the whole transfer may take. Streaming a 200 MB
+# analysis over a slow link therefore succeeds, while a dead or wedged server is
+# still caught after `timeout` seconds of silence.
 .flowr_read_message <- function(con, reader, timeout) {
+  .flowr_reader_init(reader)
   deadline <- Sys.time() + timeout
   repeat {
-    # scan only the bytes we have not scanned before, so accumulating a large
-    # (multi-MB) response stays linear rather than re-scanning the whole buffer
-    buf <- reader$buf
-    scanned <- reader$scanned %||% 0L
-    idx <- 0L
-    if (length(buf) > scanned) {
-      hit <- which(buf[(scanned + 1L):length(buf)] == as.raw(0x0a))
-      if (length(hit) > 0) {
-        idx <- scanned + hit[1L]
-      }
+    line <- .flowr_reader_take(reader)
+    if (!is.null(line)) {
+      return(line)
     }
-    if (idx > 0L) {
-      line <- if (idx > 1L) buf[seq_len(idx - 1L)] else raw(0)
-      if (length(line) > 0 && line[length(line)] == as.raw(0x0d)) {
-        line <- line[-length(line)]
-      }
-      reader$buf <- if (idx < length(buf)) buf[-seq_len(idx)] else raw(0)
-      reader$scanned <- 0L
-      return(rawToChar(line))
-    }
-    reader$scanned <- length(buf)          # fully scanned, no newline yet
     remaining <- as.numeric(difftime(deadline, Sys.time(), units = "secs"))
     if (remaining <= 0) {
-      .flowr_stop("flowR request timed out after ", round(timeout), "s")
+      .flowr_stop("flowR sent nothing for ", round(timeout), "s. If the input is ",
+                  "large, raise the limit with ",
+                  "options(flowr.request_timeout = <seconds>)")
     }
     ready <- socketSelect(list(con), write = FALSE, timeout = remaining)
     if (!isTRUE(ready)) {
       next # timeout re-checked at top of loop
     }
-    chunk <- readBin(con, what = "raw", n = 4194304L)
+    chunk <- readBin(con, what = "raw", n = .flowr_read_chunk_size)
     if (length(chunk) == 0L) {
       # socket signalled readable but delivered nothing -> peer closed
       .flowr_stop("flowR server closed the connection unexpectedly")
     }
-    reader$buf <- c(buf, chunk)
+    i <- length(reader$pending) + 1L
+    reader$pending[[i]] <- chunk
+    pos <- which(chunk == as.raw(0x0a))
+    reader$pending_nl[[i]] <- pos
+    if (length(pos) > 0) {
+      reader$has_nl <- TRUE
+    }
+    deadline <- Sys.time() + timeout      # progress: restart the idle timeout
   }
 }
 
-# Serialise and send a single message, then flush.
+# Serialise and send a single message, then flush. Written in bounded slices:
+# inlining a whole project's sources produces requests of many megabytes, and
+# handing that to writeBin() in one call needlessly doubles peak memory.
 .flowr_write_message <- function(con, command) {
   json <- jsonlite::toJSON(command, auto_unbox = TRUE, null = "null", na = "null")
-  writeBin(charToRaw(paste0(json, "\n")), con)
+  bytes <- charToRaw(as.character(json))
+  n <- length(bytes)
+  from <- 1L
+  while (from <= n) {
+    to <- min(n, from + .flowr_read_chunk_size - 1L)
+    writeBin(bytes[from:to], con)
+    from <- to + 1L
+  }
+  writeBin(as.raw(0x0a), con)
   flush(con)
   invisible(NULL)
 }
@@ -120,8 +224,19 @@
   )
 }
 
+# The idle timeout to use for the input currently under analysis. flowR's work
+# grows with the amount of source it was given, so a fixed 120s that is generous
+# for a script is far too tight for a package with thousands of files: we add
+# `timeout_per_mb` seconds for every megabyte of input. `flowr_analyze()` records
+# the size of the last input it sent; queries against that same filetoken then
+# inherit the same allowance.
+.flowr_scaled_timeout <- function(bytes = .flowr_state$input_bytes %||% 0) {
+  flowr_option("request_timeout") +
+    (as.numeric(bytes) / 1048576) * flowr_option("timeout_per_mb")
+}
+
 # Send a request and read its single response, raising flowR errors as R errors.
-.flowr_request <- function(con, command, timeout = flowr_option("request_timeout")) {
+.flowr_request <- function(con, command, timeout = .flowr_scaled_timeout()) {
   reader <- .flowr_reader_for(con)
   .flowr_log("-> ", command$type, if (!is.null(command$id)) paste0(" #", command$id) else "")
   .flowr_write_message(con, command)
@@ -136,7 +251,7 @@
 # Send a request whose reply is streamed as several messages terminated by an
 # `end-*` message (used by the REPL).  Returns the list of intermediate messages.
 .flowr_request_stream <- function(con, command, end_type,
-                                  timeout = flowr_option("request_timeout")) {
+                                  timeout = .flowr_scaled_timeout()) {
   reader <- .flowr_reader_for(con)
   .flowr_write_message(con, command)
   out <- list()

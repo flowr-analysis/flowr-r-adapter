@@ -50,17 +50,25 @@ flowr_graph <- function(code = NULL, file = NULL, folder = NULL,
     tag = vapply(verts, function(e) e[[2]]$tag %||% NA_character_, character(1)),
     stringsAsFactors = FALSE
   )
-  from <- character(0); to <- character(0); etype <- character(0)
-  for (e in g$edgeInformation %||% list()) {
-    src <- as.character(e[[1]])
-    for (te in e[[2]]) {
-      ty <- te[[2]]$types %||% te[[2]]$type
-      from <- c(from, src)
-      to <- c(to, as.character(te[[1]]))
-      etype <- c(etype, .flowr_decode_edge_type(ty))
-    }
+  # Collect per source vertex and flatten once. Appending with `c()` per edge
+  # reallocates all three vectors on every iteration, so a dataflow graph with a
+  # few hundred thousand edges (entirely normal for a package) spent minutes here.
+  einfo <- g$edgeInformation %||% list()
+  from <- vector("list", length(einfo))
+  to <- vector("list", length(einfo))
+  etype <- vector("list", length(einfo))
+  for (i in seq_along(einfo)) {
+    e <- einfo[[i]]
+    targets <- e[[2]]
+    from[[i]] <- rep(as.character(e[[1]]), length(targets))
+    to[[i]] <- vapply(targets, function(te) as.character(te[[1]]), character(1))
+    etype[[i]] <- vapply(targets, function(te) {
+      .flowr_decode_edge_type(te[[2]]$types %||% te[[2]]$type)
+    }, character(1))
   }
-  edges <- data.frame(from = from, to = to, type = etype, stringsAsFactors = FALSE)
+  chr <- function(x) unlist(x, use.names = FALSE) %||% character(0)
+  edges <- data.frame(from = chr(from), to = chr(to), type = chr(etype),
+                      stringsAsFactors = FALSE)
   # ensure every edge endpoint is a vertex (built-in functions are pseudo-nodes)
   missing <- setdiff(unique(c(edges$from, edges$to)), vertices$id)
   if (length(missing) > 0) {
@@ -119,15 +127,17 @@ flowr_as_igraph <- function(x, ...) {
 # Map a node id to the variable it is assigned to (e.g. `p <- plot()` -> plot's
 # call id -> "p"), so named plots can be shown by name.
 .flowr_assignment_names <- function(ast) {
-  m <- list()
+  # an environment, like the location map: one insert per assignment in a
+  # project-sized AST is far too many to grow a named list with
+  m <- .flowr_new_map()
   visit_node(ast, function(n) {
     if (identical(n$type, "RBinaryOp") && !is.null(n$operator)) {
       if (n$operator %in% c("<-", "=", "<<-") &&
           !is.null(n$rhs$info$id) && !is.null(n$lhs$content)) {
-        m[[as.character(n$rhs$info$id)]] <<- n$lhs$content
+        m[[as.character(n$rhs$info$id)]] <- n$lhs$content
       } else if (n$operator %in% c("->", "->>") &&
                  !is.null(n$lhs$info$id) && !is.null(n$rhs$content)) {
-        m[[as.character(n$lhs$info$id)]] <<- n$rhs$content
+        m[[as.character(n$lhs$info$id)]] <- n$rhs$content
       }
     }
     TRUE
@@ -167,8 +177,8 @@ flowr_overview <- function(code = NULL, file = NULL, folder = NULL, session = NU
               filetoken = an$filetoken, query = I(list(list(type = "dependencies"))))
   deps <- .flowr_request(session$con, req)$results$dependencies
   # reuse the same analysis for source lines and assigned names
-  loc <- list()
-  names_map <- list()
+  loc <- .flowr_new_map()
+  names_map <- .flowr_new_map()
   tryCatch({
     ast <- an$analysis$results$normalize$ast
     loc <- make_id_to_location_map(ast)

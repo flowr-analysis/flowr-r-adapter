@@ -106,7 +106,7 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
   entry <- if (!is.null(ss) && length(ss) > 0) ss[[1]] else list()
   ids <- entry$slice$result
   loc_map <- tryCatch(make_id_to_location_map(an$analysis$results$normalize$ast),
-                      error = function(e) list())
+                      error = function(e) .flowr_new_map())
   lines <- .flowr_covered_lines(ids, loc_map)
   # flowR echoes an unresolved criterion back rather than failing. A slice hit
   # something if it either covers source lines or reconstructs code: folder
@@ -246,6 +246,42 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
   folder
 }
 
+# Every .R file of a project worth analysing. Announces what it pruned so a
+# missing file is never a silent mystery.
+.flowr_project_files <- function(folder) {
+  skip <- as.character(flowr_option("skip_dirs"))
+  # relative paths, so the prune test looks at directories *inside* the project
+  # and a project that itself lives under e.g. .../revdep/ is not wiped out
+  rel <- list.files(folder, pattern = "\\.[rR]$", recursive = TRUE)
+  all <- file.path(folder, rel)
+  parts <- strsplit(gsub("\\\\", "/", rel), "/", fixed = TRUE)
+  # which prune entry (if any) knocked each file out -- reported back, so a file
+  # missing from an analysis is never a silent mystery
+  why <- vapply(parts, function(p) {
+    if (length(p) < 2L) {
+      return(NA_character_)
+    }
+    dirs <- p[-length(p)]
+    # two-component entries such as "renv/library" as well as single ones
+    pairs <- if (length(dirs) > 1L) {
+      paste(utils::head(dirs, -1L), utils::tail(dirs, -1L), sep = "/")
+    } else {
+      character(0)
+    }
+    hit <- c(intersect(c(pairs, dirs), skip), dirs[grepl("\\.Rcheck$", dirs)])
+    if (length(hit) > 0) hit[[1]] else NA_character_
+  }, character(1))
+  pruned <- !is.na(why)
+  if (any(pruned) && !isTRUE(flowr_option("quiet"))) {
+    where <- unique(why[pruned])
+    message("[flowr] skipped ", sum(pruned), " .R file(s) under ",
+            paste(utils::head(where, 3L), collapse = ", "),
+            if (length(where) > 3L) sprintf(" and %d more", length(where) - 3L) else "",
+            "; change with options(flowr.skip_dirs = )")
+  }
+  all[!pruned]
+}
+
 # Resolve code/file/folder into a (cached) analysis, defaulting to the current R
 # package folder when none is given. Returns list(an, original, folder).
 # Requires a real engine for a folder. `session` must already be resolved.
@@ -257,7 +293,7 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
   }
   folder <- .flowr_default_source(code, file, folder)
   if (!is.null(folder)) {
-    files <- list.files(folder, pattern = "\\.[rR]$", recursive = TRUE, full.names = TRUE)
+    files <- .flowr_project_files(folder)
     if (length(files) == 0) {
       .flowr_stop("no .R files found in ", folder)
     }
@@ -274,14 +310,24 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
 
 # Original line numbers covered by a set of node ids.
 .flowr_covered_lines <- function(ids, loc_map) {
-  lines <- integer(0)
+  if (length(ids) == 0) {
+    return(integer(0))
+  }
+  # collect then flatten once: `lines <- c(lines, ...)` per id reallocates the
+  # whole vector each time, which is quadratic in the size of the slice
+  parts <- vector("list", length(ids))
+  n <- 0L
   for (id in ids) {
     loc <- loc_map[[paste0(id)]]
     if (!is.null(loc) && length(loc) >= 3) {
-      lines <- c(lines, as.integer(loc[[1]]):as.integer(loc[[3]]))
+      n <- n + 1L
+      parts[[n]] <- as.integer(loc[[1]]):as.integer(loc[[3]])
     }
   }
-  sort(unique(lines))
+  if (n == 0L) {
+    return(integer(0))
+  }
+  sort(unique(unlist(parts[seq_len(n)], use.names = FALSE)))
 }
 
 # Decide whether to emit ANSI colour: option flowr.color wins, then NO_COLOR,
@@ -360,7 +406,7 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
     } else if (grepl("^\\$", cr)) {                      # $node-id
       if (is.null(loc_map)) {
         loc_map <- tryCatch(make_id_to_location_map(x$analysis$results$normalize$ast),
-                            error = function(e) list())
+                            error = function(e) .flowr_new_map())
       }
       loc <- loc_map[[sub("^\\$", "", cr)]]
       if (!is.null(loc) && length(loc) >= 4 && loc[[1]] == loc[[3]]) {
@@ -376,10 +422,13 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
 # when only the first statement contributes; the ranges let the printer dim the
 # rest instead of implying all of it made the slice.
 .flowr_covered_ranges <- function(ids, loc_map, lines) {
-  res <- list()
+  # keyed by line in an environment while building: a slice can carry hundreds of
+  # thousands of ids, and appending into a named list re-copies it every time
+  res <- .flowr_new_map()
   add <- function(line, start, end) {
     if (line >= 1L && line <= length(lines) && end >= start) {
-      res[[as.character(line)]] <<- c(res[[as.character(line)]], list(c(start, end)))
+      k <- as.character(line)
+      res[[k]] <- c(res[[k]], list(c(start, end)))
     }
   }
   for (id in ids) {
@@ -401,7 +450,7 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
     }
     add(p[3], 1L, p[4])
   }
-  res
+  as.list(res)
 }
 
 # Per-character mask of the columns a slice contributes to. Connector-only gaps
@@ -515,9 +564,9 @@ print.flowr_slice <- function(x, style = x$style %||% getOption("flowr.slice_sty
   cat(.flowr_ansi(header, "1", color), "\n", sep = "")
   loc_map <- if (isTRUE(color)) {
     tryCatch(make_id_to_location_map(x$analysis$results$normalize$ast),
-             error = function(e) list())
+             error = function(e) .flowr_new_map())
   } else {
-    list()
+    .flowr_new_map()
   }
   ul <- if (isTRUE(color)) .flowr_underline_ranges(x, lines, loc_map) else list()
   cov <- if (isTRUE(color)) .flowr_covered_ranges(x$ids, loc_map, lines) else list()
@@ -552,7 +601,7 @@ print.flowr_slice <- function(x, style = x$style %||% getOption("flowr.slice_sty
 #' @return The query results, a named list keyed by query type. Printing caps
 #'   long nested lists/vectors at a few dozen elements; the values themselves
 #'   are untouched, only the console view.
-#' @details Supported query types in flowR 2.13.1 include `dependencies`,
+#' @details Supported query types in flowR 2.13.3 include `dependencies`,
 #'   `call-context`, `dataflow`, `static-slice`, `id-map`, `normalized-ast`,
 #'   `linter`, `location-map`, `call-graph`, `absint` (abstract
 #'   interpretation, e.g. `list(type = "absint", inference = "df-shape")` for
@@ -980,7 +1029,7 @@ flowr_watch <- function(file, action = function(f) print(flowr_overview(file = f
 #'
 #' @param x A `flowr_slice`, or an analysis AST as returned within one.
 #' @return A named list mapping node id (as string) to a `[line1, col1, line2,
-#'   col2]` location.
+#'   col2]` location, ordered by node id.
 #' @export
 #' @examples
 #' \dontrun{
@@ -989,7 +1038,12 @@ flowr_watch <- function(file, action = function(f) print(flowr_overview(file = f
 #' }
 flowr_locations <- function(x) {
   ast <- if (inherits(x, "flowr_slice")) x$analysis$results$normalize$ast else x
-  make_id_to_location_map(ast)
+  # built as an environment so it scales to project-sized ASTs; the public
+  # return value stays the named list callers have always indexed into
+  map <- as.list(make_id_to_location_map(ast))
+  nm <- names(map)
+  num <- suppressWarnings(as.numeric(nm))
+  map[order(is.na(num), num, nm)]
 }
 
 #' Source locations of the nodes contained in a slice
@@ -1010,15 +1064,21 @@ flowr_slice_locations <- function(slice) {
   if (!inherits(slice, "flowr_slice")) {
     .flowr_stop("`slice` must be a flowr_slice")
   }
-  location_map <- tryCatch(flowr_locations(slice), error = function(e) list())
-  out <- list()
+  ast <- slice$analysis$results$normalize$ast
+  location_map <- tryCatch(make_id_to_location_map(ast),
+                           error = function(e) .flowr_new_map())
+  # preallocate: `out[[length(out) + 1L]] <- ...` re-copies the list on every
+  # append, so a large slice spent quadratic time here
+  out <- vector("list", length(slice$ids))
+  n <- 0L
   for (id in slice$ids) {
     loc <- location_map[[paste0(id)]]
     if (!is.null(loc)) {
-      out[[length(out) + 1L]] <- loc
+      n <- n + 1L
+      out[[n]] <- loc
     }
   }
-  out
+  if (n == length(out)) out else out[seq_len(n)]
 }
 
 #' Build a slicing criterion for a cursor position

@@ -16,7 +16,7 @@
 #' @param engine Which engine to use: `"auto"` (default), `"bundled"` (the flowR
 #'   JS+wasm shipped with the package, run on your Node), `"binary"`
 #'   (self-contained, no Node), `"node"` or `"docker"`.
-#' @param flowr_version flowR version to obtain (default `"2.13.1"`).
+#' @param flowr_version flowR version to obtain (default `"2.13.3"`).
 #' @param flowr_engine flowR parser engine, `"tree-sitter"` (default, needs no R)
 #'   or `"r-shell"` (reuses the R on your `PATH`).
 #' @param host,port Bind host (loopback) and preferred port for the spawned
@@ -212,8 +212,14 @@ flowr_analyze <- function(code = NULL, file = NULL, files = NULL, cfg = FALSE,
   paths <- if (!is.null(files)) normalizePath(files, mustWork = TRUE)
            else if (!is.null(file)) normalizePath(file, mustWork = TRUE)
            else NULL
-  key <- if (!is.null(paths)) paste0("path:", paste(sort(paths), collapse = ";"))
-         else paste0("code:", code)
+  if (!is.null(paths)) {
+    .flowr_check_file_count(length(paths))
+  }
+  # remember how much source this input carries, so the socket timeout scales
+  # with the work flowR has to do -- also on a cache hit, since the follow-up
+  # queries against that filetoken are the slow part (see .flowr_scaled_timeout)
+  .flowr_state$input_bytes <- .flowr_input_bytes(paths, code)
+  key <- .flowr_cache_key(paths, code, cfg)
   hit <- session$cache[[key]]
   if (!is.null(hit) && identical(hit$cfg, cfg)) {
     return(hit)
@@ -231,6 +237,54 @@ flowr_analyze <- function(code = NULL, file = NULL, files = NULL, cfg = FALSE,
   entry <- list(filetoken = filetoken, analysis = res, cfg = cfg)
   .flowr_cache_put(session, key, entry)
   entry
+}
+
+# Total size of an analysis input, in bytes.
+.flowr_input_bytes <- function(paths, code) {
+  if (!is.null(paths)) {
+    return(sum(file.size(paths), na.rm = TRUE))
+  }
+  if (!is.null(code)) {
+    return(sum(nchar(code, type = "bytes")))
+  }
+  0
+}
+
+# Refuse absurd inputs early, with a message that says what to do, rather than
+# letting the server churn for minutes on a tree the user did not mean to send.
+.flowr_check_file_count <- function(n) {
+  cap <- flowr_option("max_files")
+  if (is.null(cap) || is.na(cap) || cap <= 0 || n <= cap) {
+    return(invisible(n))
+  }
+  .flowr_stop(n, " files selected for one analysis (limit ", cap, "). Point flowr ",
+              "at a narrower folder, or raise the limit with ",
+              "options(flowr.max_files = ", n, ")")
+}
+
+# The session cache is an environment, and an environment keys on *symbols* --
+# which R caps at 10000 bytes. Using the source text (or the joined file paths)
+# as the key therefore blew up with "variable names are limited to 10000 bytes"
+# on any script or project past that size. Hash the identity into a fixed-width
+# key instead, so input size no longer matters.
+#
+# File inputs additionally fold in each file's size and mtime: keying on paths
+# alone silently served a stale analysis after the files on disk had changed.
+.flowr_cache_key <- function(paths, code, cfg = FALSE) {
+  tag <- paste0(if (isTRUE(cfg)) "g" else "n")
+  if (!is.null(paths)) {
+    sp <- sort(paths)
+    info <- file.info(sp)
+    ident <- paste0(sp, "|", info$size, "|", as.numeric(info$mtime), collapse = ";")
+    return(paste0("f", tag, .flowr_digest(ident)))
+  }
+  paste0("c", tag, .flowr_digest(code))
+}
+
+# serialize = FALSE hashes the string's bytes directly, so we never build a
+# second copy of a multi-megabyte source in memory just to key the cache.
+.flowr_digest <- function(x) {
+  digest::digest(x, algo = "sha256", serialize = FALSE)
 }
 
 .flowr_cache_put <- function(session, key, entry) {

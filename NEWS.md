@@ -1,3 +1,30 @@
+# flowr (development version)
+
+* Targets flowR 2.13.3 (from 2.13.1); the shipped `inst/flowr-js` bundle is
+  rebuilt accordingly. Upstream, the `dependencies` query dropped its
+  `undeclared` and `unused` segments and `inspect_project()` gained an
+  `environment` file role.
+* Analysing more than ~10 kB no longer fails with `variable names are limited to
+  10000 bytes`: the analysis cache keyed on the source text itself, and R caps a
+  symbol at 10000 bytes. Entries are now keyed on a hash of the input.
+* File cache entries fold in each file's size and mtime, so editing a file
+  invalidates its analysis instead of serving a stale one.
+* Large inputs are no longer quadratic: the socket reader, the id-to-location
+  map, a slice's covered lines and `flowr_graph()`'s edge frames all re-copied
+  their accumulator per step. A 12000-line script now slices in seconds.
+* `request_timeout` is now a *no-progress* timeout, and scales with input size by
+  `flowr.timeout_per_mb` seconds per megabyte (default 60). Timeout errors say
+  which option to raise.
+* Analysing a folder skips vendored and build directories (`renv/library`,
+  `node_modules`, `.git`, `*.Rcheck`, ...), reporting what it skipped. Set
+  `flowr.skip_dirs` to change the list.
+* New `flowr.max_files` option (default 5000, 0 disables) refuses an accidental
+  analysis of a huge tree up front.
+* `flowr_status()` links the flowR version to its release notes, and now prints
+  the command that gets a newer flowr instead of only advising an update.
+* `flowr_locations()` keeps its shape (a named list) but is now ordered by node
+  id.
+
 # flowr 0.2.9
 
 # flowr 0.2.8

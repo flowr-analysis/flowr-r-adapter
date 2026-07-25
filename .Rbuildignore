@@ -20,5 +20,6 @@
 ^flowr-.*\.tar\.gz.*$
 ^flowr\.Rcheck$
 ^node_modules$
+^package\.json$
 ^package-lock\.json$
 ^\.sigdb-work$

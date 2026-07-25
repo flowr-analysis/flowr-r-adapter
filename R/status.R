@@ -233,6 +233,40 @@ flowr_status <- function() {
   )
 }
 
+# flowR's release page for a version, so the version `flowr_status()` reports
+# links straight to the notes for it. NULL for anything that is not a plain
+# version (an unknown "?" from a session that never answered, say).
+.flowr_flowr_release_url <- function(version) {
+  if (length(version) != 1L || is.na(version) ||
+      !grepl("^[0-9]+(\\.[0-9]+)*$", version)) {
+    return(NULL)
+  }
+  paste0("https://github.com/flowr-analysis/flowr/releases/tag/v", version)
+}
+
+# The version, underlined and hyperlinked to its release notes when the terminal
+# can actually follow an OSC 8 link; plain text everywhere else, so we never
+# advertise a link that does nothing.
+.flowr_release_link <- function(version, color) {
+  url <- .flowr_flowr_release_url(version)
+  if (is.null(url) || !isTRUE(color) || !.flowr_hyperlinks_supported()) {
+    return(version)
+  }
+  .flowr_hyperlink(.flowr_ansi(version, "4", TRUE), url, TRUE)
+}
+
+# How to actually get an available update, as a command you can paste. Saying
+# only "update the flowr package" left the reader stuck: flowr is not on CRAN
+# (the name is held by an unrelated archived package), so update.packages() does
+# nothing for it and the install path is not guessable.
+.flowr_update_hint <- function(what, version) {
+  if (identical(what, "flowR")) {
+    return(sprintf("flowr_update(\"%s\")", version))
+  }
+  c('remotes::install_github("flowr-analysis/flowr-r-adapter",',
+    '                        build_vignettes = TRUE)')
+}
+
 #' @export
 print.flowr_status <- function(x, ...) {
   width <- min(getOption("width", 80L), 72L)
@@ -306,7 +340,8 @@ print.flowr_status <- function(x, ...) {
   }
 
   rule("flowR")
-  row("version", if (!is.null(x$session)) x$session$flowr else x$config$flowr_version)
+  row("version", .flowr_release_link(
+    if (!is.null(x$session)) x$session$flowr else x$config$flowr_version, color))
   row("parser", x$config$flowr_engine)
   row("secure", yn(x$config$secure))
   if (!is.null(x$backend)) {
@@ -333,11 +368,9 @@ print.flowr_status <- function(x, ...) {
   for (nm in names(x$updates)) {
     row("update", .flowr_ansi(sprintf("%s %s -> %s available", nm, x$updates[[nm]][1],
                                       x$updates[[nm]][2]), "33", color))
-    row("", .flowr_ansi(if (identical(nm, "flowR")) {
-      sprintf("flowr_update(\"%s\")", x$updates[[nm]][2])
-    } else {
-      "update the flowr package to get it"
-    }, "90", color))
+    for (line in .flowr_update_hint(nm, x$updates[[nm]][2])) {
+      row("", .flowr_ansi(line, "90", color))
+    }
   }
   cat(strrep("=", width), "\n", sep = "")
   invisible(x)

@@ -106,6 +106,33 @@ flowr_overview()    # the package's libraries, plots, reads/writes - ready to sl
 `inspect_project()`, `flowr_overview()`, `slice()`, `query()` and friends all
 accept `code`, `file` or `folder`; with none, they analyse the enclosing project.
 
+### Large projects
+
+Analysing a folder only picks up code you wrote: vendored and build directories
+(`renv/library`, `packrat/lib`, `node_modules`, `.git`, `revdep`, `*.Rcheck`,
+...) are skipped, and flowr says how many files that was. Adjust the list with
+`options(flowr.skip_dirs = )`, or pass the files you want explicitly. As a
+backstop against pointing flowr at a whole home directory by accident, more than
+`options(flowr.max_files = )` files (5000 by default, 0 to disable) in one
+analysis is refused up front.
+
+Analysis time grows with the amount of source, so the socket timeout does too:
+flowr waits `options(flowr.request_timeout = )` seconds (120) plus
+`options(flowr.timeout_per_mb = )` seconds per megabyte of input (60). The
+timeout bounds how long flowR may stay *silent* --- a large reply streaming in
+never trips it. Raise `flowr.request_timeout` if a very large project still runs
+out of time.
+
+```{r}
+options(flowr.skip_dirs = character(0))   # analyse vendored code too
+options(flowr.max_files = 20000)          # allow a very large tree
+options(flowr.request_timeout = 600)      # be more patient
+```
+
+Analyses are cached per session by input content (and, for files, by their size
+and modification time), so re-slicing the same project with a different criterion
+does not re-analyse it, while editing a file does.
+
 ## Lint
 
 `flowr_lint()` runs flowR's linter and returns the findings as a tidy data frame whose

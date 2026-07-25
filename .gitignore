@@ -17,6 +17,7 @@ flowr.Rcheck/
 .Rprofile
 # npm install target for rebuilding inst/flowr-js (see MAINTAINING.md); never committed
 node_modules/
+package.json
 package-lock.json
 # make sigdb's shard cache (tools/pack-sigdb.sh); never committed
 .sigdb-work/
