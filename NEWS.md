@@ -1,4 +1,4 @@
-# flowr (development version)
+# flowr 0.2.11
 
 * Targets flowR 2.13.3 (from 2.13.1); the shipped `inst/flowr-js` bundle is
   rebuilt accordingly. Upstream, the `dependencies` query dropped its
