@@ -217,11 +217,61 @@
   invisible(NULL)
 }
 
+# Chunked replies -------------------------------------------------------------
+#
+# A reply too large for `JSON.stringify` (V8 caps a single string, and a
+# project-sized analysis is past that cap) is streamed by flowR in chunks
+# instead, from `bigStringify` in its util/json.js.  The chunks arrive
+# back-to-back and are reassembled here into the one newline-terminated message
+# they form -- that part needs nothing special.
+#
+# What the chunked writer does differently is escaping.  Where `JSON.stringify`
+# runs values through a replacer, the chunk writer interpolates two kinds of
+# value verbatim:
+#
+#   * the built-in-environment placeholder, as bare `"parent":<BuiltInEnvironment>`
+#     rather than the string `"<BuiltInEnvironment>"` the replacer produces, and
+#   * `RegExp` values, as `"${re.toString()}"`, so a pattern's own backslashes
+#     (`dev\.new`) arrive unescaped.
+#
+# Neither survives a strict JSON parser, so we normalise both back to the form
+# the non-chunked path emits before handing the message to jsonlite.  Both
+# rewrites are exact -- there is a single well-defined form each value should
+# have had -- and they run only after a parse has already failed, so a reply
+# that is already valid JSON is never touched.
+.flowr_repair_json <- function(line) {
+  # A placeholder in value position becomes the string it stands for.  Anchoring
+  # on both sides (a value follows `,` `:` or `[` and is followed by `,` `}` or
+  # `]`) keeps the rewrite off anything inside a string literal.
+  line <- gsub("(?<=[,:[])(<[A-Za-z]+>)(?=[,}\\]])", "\"\\1\"", line, perl = TRUE)
+  # A backslash that opens an escape JSON does not define gets escaped itself.
+  # `((?:\\\\)*)` consumes complete backslash pairs first, so a legitimately
+  # escaped `\\` is never mistaken for the start of a bad escape and the
+  # rewrite is idempotent.
+  gsub("(?<!\\\\)((?:\\\\\\\\)*)\\\\([^\"\\\\/bfnrtu])", "\\1\\\\\\\\\\2",
+       line, perl = TRUE)
+}
+
 .flowr_parse <- function(line) {
-  jsonlite::fromJSON(
-    line,
-    simplifyVector = FALSE, simplifyDataFrame = FALSE, simplifyMatrix = FALSE
-  )
+  one <- function(x) {
+    jsonlite::fromJSON(
+      x,
+      simplifyVector = FALSE, simplifyDataFrame = FALSE, simplifyMatrix = FALSE
+    )
+  }
+  tryCatch(one(line), error = function(e) {
+    repaired <- .flowr_repair_json(line)
+    if (!identical(repaired, line)) {
+      out <- tryCatch(one(repaired), error = function(e2) NULL)
+      if (!is.null(out)) {
+        .flowr_log("normalised escaping of a chunk-serialised reply")
+        return(out)
+      }
+    }
+    .flowr_stop("could not parse flowR's ",
+                sprintf("%.1f MB", nchar(line, type = "bytes") / 1048576),
+                " reply: ", conditionMessage(e))
+  })
 }
 
 # The idle timeout to use for the input currently under analysis. flowR's work

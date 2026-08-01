@@ -55,7 +55,11 @@ session is used when \code{NULL}. Pass an explicit one to work with several at o
 \value{
 A \code{flowr_slice} with \code{code} (reconstructed slice), \code{ids} (included
 node ids), \code{original} (the input source), \code{lines} (original line numbers in
-the slice), plus \code{criteria}, \code{direction} and the raw \code{response}. With
+the slice), \code{covered} (the same coverage as a data frame of \code{file} and
+\code{line} --- line numbers are per file, so for a multi-file slice \code{lines}
+alone cannot tell line 42 of one file from line 42 of another; \code{file} is
+\code{NA} when the analysis did not report one), plus \code{criteria}, \code{direction}
+and the raw \code{response}. With
 \code{inline_sources = TRUE} it also carries \code{inline_warnings}, a data frame of
 \code{source()} calls that could not be inlined (\code{kind} is \code{"cycle"} or
 \code{"unresolved"}, with the call's node \code{id} and, when known, its \code{path}).

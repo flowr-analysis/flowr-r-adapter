@@ -25,6 +25,48 @@ test_that("line extraction handles complete, partial, multiple and CRLF frames",
   expect_identical(rawToChar(r$rest), "x")
 })
 
+test_that("a chunk-serialised reply's bare placeholders are read as strings", {
+  # the chunked writer emits the built-in-environment placeholder bare, where
+  # the replacer would have produced the string "<BuiltInEnvironment>"
+  broken <- '{"env":{"id":7,"parent":<BuiltInEnvironment>,"memory":[]},"xs":[<BuiltInEnvironment>]}'
+  res <- flowr:::.flowr_parse(broken)
+  expect_identical(res$env$parent, "<BuiltInEnvironment>")
+  expect_identical(res$xs[[1]], "<BuiltInEnvironment>")
+  expect_identical(res$env$id, 7L)
+})
+
+test_that("a chunk-serialised reply's unescaped regex backslashes are read back", {
+  # RegExp values are interpolated with `${re.toString()}`, so their own
+  # backslashes arrive unescaped -- `\.` is not a JSON escape
+  res <- flowr:::.flowr_parse('{"pattern":"/^(dev\\.new|x11)$/"}')
+  expect_identical(res$pattern, "/^(dev\\.new|x11)$/")
+})
+
+test_that("escape repair respects backslash parity and is idempotent", {
+  r <- flowr:::.flowr_repair_json
+  # a legitimately escaped backslash followed by `.` must survive untouched
+  expect_identical(r('"a\\\\.b"'), '"a\\\\.b"')
+  # a lone backslash opening a non-escape gets escaped
+  expect_identical(r('"a\\.b"'), '"a\\\\.b"')
+  # real JSON escapes are left alone
+  expect_identical(r('"a\\nb\\tc\\"d\\u0041"'), '"a\\nb\\tc\\"d\\u0041"')
+  # running the repair twice changes nothing more
+  expect_identical(r(r('"a\\.b"')), r('"a\\.b"'))
+})
+
+test_that("a well-formed reply is never rewritten by the repair", {
+  # the rewrite only runs after a parse has already failed, so a payload that
+  # legitimately contains the placeholder text is left exactly as it arrived
+  ok <- '{"msg":"see <BuiltInEnvironment> for details","n":1}'
+  expect_identical(flowr:::.flowr_parse(ok)$msg,
+                   "see <BuiltInEnvironment> for details")
+  expect_identical(flowr:::.flowr_repair_json(ok), ok)
+})
+
+test_that("a genuinely truncated reply still reports why it could not be read", {
+  expect_error(flowr:::.flowr_parse('{"a":'), "could not parse flowR")
+})
+
 test_that("query normalisation accepts names, objects and lists", {
   expect_identical(flowr:::.flowr_normalize_query("dependencies"),
                    list(list(type = "dependencies")))

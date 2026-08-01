@@ -1,3 +1,35 @@
+# flowr (development version)
+
+* Targets flowR 2.13.8 (from 2.13.3); the shipped `inst/flowr-js` bundle is
+  rebuilt accordingly. The query surface is unchanged.
+* Analysing a package-sized folder works again. Above a certain size flowR
+  streams a reply in chunks rather than through `JSON.stringify`, and the
+  chunked form writes its built-in-environment placeholder bare and leaves
+  `RegExp` backslashes unescaped; both are now normalised before parsing, so
+  `inspect_project()`, `flowr_lint()` and folder queries no longer fail with
+  `lexical error: invalid char in json text`.
+* A slice over a whole project reports its source lines again, and node
+  locations are more complete everywhere. They now come from flowR's
+  `location-map` query rather than a walk of the normalized AST: the walk only
+  reached the node types the visitor had a branch for (on a two-file project it
+  found 26 locations where the query reports 59), and the chunked form omits
+  each node's `info`, so for a project-sized analysis the walk found no ids at
+  all. Where both have an id they agree exactly, so this only ever adds
+  locations; the walk stays as a fallback.
+* Locations carry the file their line numbers are counted in as a `"file"`
+  attribute, and a slice gains `$covered`, a data frame of `file` and `line`.
+  Line numbers restart per file, so `$lines` alone could not tell line 42 of one
+  file from line 42 of another --- slicing this package's own `R/` covers 994
+  distinct file/line pairs that `$lines` collapsed to 512 numbers. Inline code
+  reports `NA` rather than the scratch file flowR analysed it out of.
+* Fixed three crashes in the AST visitor reachable on real project ASTs: an
+  unnamed call (`spec$ensure(x)`) arrives without a `named` field and was an
+  error rather than a descent into its `calledFunction`; a node carrying a
+  location but no `info` broke the location map; and an access node without an
+  `operator` stopped the walk.
+* `flowr_locations()` returns an empty list instead of failing when an analysis
+  yields no locations.
+
 # flowr 0.2.11
 
 * Targets flowR 2.13.3 (from 2.13.1); the shipped `inst/flowr-js` bundle is

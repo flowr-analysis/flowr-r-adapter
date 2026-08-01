@@ -16,7 +16,7 @@
 #' @param engine Which engine to use: `"auto"` (default), `"bundled"` (the flowR
 #'   JS+wasm shipped with the package, run on your Node), `"binary"`
 #'   (self-contained, no Node), `"node"` or `"docker"`.
-#' @param flowr_version flowR version to obtain (default `"2.13.3"`).
+#' @param flowr_version flowR version to obtain (default `"2.13.8"`).
 #' @param flowr_engine flowR parser engine, `"tree-sitter"` (default, needs no R)
 #'   or `"r-shell"` (reuses the R on your `PATH`).
 #' @param host,port Bind host (loopback) and preferred port for the spawned

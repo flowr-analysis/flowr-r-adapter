@@ -54,7 +54,7 @@ or wrong key aborts the install.
 ## 2. Publish the native binaries for a flowR version
 
 Run the **build-flowr-binaries** GitHub Action (Actions tab -> Run workflow),
-entering the flowR version (default `2.13.3`). To the `flowr-v<version>` release
+entering the flowR version (default `2.13.8`). To the `flowr-v<version>` release
 it uploads, each with a `.sha256` and (if the secret is set) a `.sig`:
 
 * `flowr-<version>-<os>-<arch>.tar.gz` — a self-contained binary per platform
@@ -89,6 +89,36 @@ echo "VERSION <version>" > inst/flowr-js/VERSION
 ```
 
 Then bump the default in `R/config.R` (`flowr_version`) and re-run `make check`.
+
+### Chunked replies
+
+Above a certain size flowR stops using `JSON.stringify` for a reply and streams
+it in chunks instead (`bigStringify` in its `util/json.js`). A package-sized
+analysis is past that point — this package's own `R/` already is, at ~12 MB.
+The chunks arrive back-to-back and `R/protocol.R` reassembles them into the one
+newline-terminated message they form.
+
+Two things differ in the chunked form, and `.flowr_repair_json()` normalises
+both back before jsonlite sees the message:
+
+* the built-in-environment placeholder is written bare
+  (`"parent":<BuiltInEnvironment>`) rather than as the string the replacer
+  produces, and
+* `RegExp` values are interpolated with `${re.toString()}`, so a pattern's own
+  backslashes (`dev\.new`) arrive unescaped.
+
+The chunked writer also skips each node's `info`, which is where node **ids**
+live — so the normalized AST of a large analysis has no ids and
+`make_id_to_location_map()` comes back empty. `.flowr_location_map()` therefore
+asks the `location-map` query first and only walks the AST if that yields
+nothing. The query is the better source regardless: the walk reaches only the
+node types `visit_node()` has a branch for (26 locations against 59 on a
+two-file project), and where both have an id they agree exactly.
+
+Locations are numbered **per file**, so each carries the file it belongs to as
+its `"file"` attribute and a slice's `$covered` frame pairs `file` with `line`.
+`$lines` is the flat union and cannot separate line 42 of one file from line 42
+of another.
 
 ## 4. Dependencies
 

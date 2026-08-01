@@ -35,7 +35,11 @@
 #'   session is used when `NULL`. Pass an explicit one to work with several at once.
 #' @return A `flowr_slice` with `code` (reconstructed slice), `ids` (included
 #'   node ids), `original` (the input source), `lines` (original line numbers in
-#'   the slice), plus `criteria`, `direction` and the raw `response`. With
+#'   the slice), `covered` (the same coverage as a data frame of `file` and
+#'   `line` --- line numbers are per file, so for a multi-file slice `lines`
+#'   alone cannot tell line 42 of one file from line 42 of another; `file` is
+#'   `NA` when the analysis did not report one), plus `criteria`, `direction`
+#'   and the raw `response`. With
 #'   `inline_sources = TRUE` it also carries `inline_warnings`, a data frame of
 #'   `source()` calls that could not be inlined (`kind` is `"cycle"` or
 #'   `"unresolved"`, with the call's node `id` and, when known, its `path`).
@@ -105,9 +109,9 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
   ss <- res$results[["static-slice"]]$results
   entry <- if (!is.null(ss) && length(ss) > 0) ss[[1]] else list()
   ids <- entry$slice$result
-  loc_map <- tryCatch(make_id_to_location_map(an$analysis$results$normalize$ast),
-                      error = function(e) .flowr_new_map())
+  loc_map <- .flowr_location_map(an, session, files = !isTRUE(src$inline))
   lines <- .flowr_covered_lines(ids, loc_map)
+  covered <- .flowr_covered_by_file(ids, loc_map)
   # flowR echoes an unresolved criterion back rather than failing. A slice hit
   # something if it either covers source lines or reconstructs code: folder
   # slices reconstruct no combined code (but cover lines), so check both and only
@@ -135,6 +139,9 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
       ids = ids,
       original = original,
       lines = lines,
+      # the same coverage split by file: `lines` alone cannot tell line 42 of
+      # one file from line 42 of another
+      covered = covered,
       criteria = as.character(criterion),
       direction = direction,
       include_callees = include_callees,
@@ -143,6 +150,9 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
       style = style,
       filetoken = an$filetoken,
       analysis = an$analysis,
+      # kept so printing and flowr_locations() do not have to rebuild it -- and
+      # so they still have locations when the AST arrived without node ids
+      locations = loc_map,
       response = res
     ),
     class = "flowr_slice"
@@ -298,14 +308,52 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
       .flowr_stop("no .R files found in ", folder)
     }
     list(an = flowr_analyze(files = files, cfg = cfg, session = session),
-         original = NULL, folder = folder)
+         original = NULL, folder = folder, inline = FALSE)
   } else {
     original <- if (!is.null(code)) code
                 else if (!is.null(file)) paste(readLines(file, warn = FALSE), collapse = "\n")
                 else NULL
     list(an = flowr_analyze(code = code, file = file, cfg = cfg, session = session),
-         original = original, folder = NULL)
+         original = original, folder = NULL,
+         # a snippet has no file of its own: flowR analyses it out of a scratch
+         # file whose path is gone by the time anyone could look at it, so it is
+         # not something to report back as a location's origin
+         inline = is.null(file))
   }
+}
+
+# The lines a slice covers, as (file, line) pairs.
+#
+# Locations are numbered per file, so for a multi-file slice the bare line
+# numbers of `.flowr_covered_lines()` collapse line 42 of one file onto line 42
+# of another. This keeps them apart. `file` is NA when the analysis did not say
+# which file a node came from (a single snippet, or an AST-only fallback).
+.flowr_covered_by_file <- function(ids, loc_map) {
+  empty <- data.frame(file = character(0), line = integer(0),
+                      stringsAsFactors = FALSE)
+  if (length(ids) == 0) {
+    return(empty)
+  }
+  files <- vector("list", length(ids))
+  lines <- vector("list", length(ids))
+  n <- 0L
+  for (id in ids) {
+    loc <- loc_map[[paste0(id)]]
+    if (!is.null(loc) && length(loc) >= 3) {
+      span <- as.integer(loc[[1]]):as.integer(loc[[3]])
+      n <- n + 1L
+      lines[[n]] <- span
+      files[[n]] <- rep_len(attr(loc, "file") %||% NA_character_, length(span))
+    }
+  }
+  if (n == 0L) {
+    return(empty)
+  }
+  out <- data.frame(file = unlist(files[seq_len(n)], use.names = FALSE),
+                    line = unlist(lines[seq_len(n)], use.names = FALSE),
+                    stringsAsFactors = FALSE)
+  out <- unique(out)
+  out[order(out$file, out$line, na.last = FALSE), , drop = FALSE]
 }
 
 # Original line numbers covered by a set of node ids.
@@ -405,8 +453,7 @@ slice <- function(code = NULL, criterion, direction = c("backward", "forward"),
       }
     } else if (grepl("^\\$", cr)) {                      # $node-id
       if (is.null(loc_map)) {
-        loc_map <- tryCatch(make_id_to_location_map(x$analysis$results$normalize$ast),
-                            error = function(e) .flowr_new_map())
+        loc_map <- .flowr_slice_location_map(x)
       }
       loc <- loc_map[[sub("^\\$", "", cr)]]
       if (!is.null(loc) && length(loc) >= 4 && loc[[1]] == loc[[3]]) {
@@ -562,12 +609,7 @@ print.flowr_slice <- function(x, style = x$style %||% getOption("flowr.slice_sty
                     paste(x$criteria, collapse = ", "), x$direction,
                     sum(keep), length(lines), pct)
   cat(.flowr_ansi(header, "1", color), "\n", sep = "")
-  loc_map <- if (isTRUE(color)) {
-    tryCatch(make_id_to_location_map(x$analysis$results$normalize$ast),
-             error = function(e) .flowr_new_map())
-  } else {
-    .flowr_new_map()
-  }
+  loc_map <- if (isTRUE(color)) .flowr_slice_location_map(x) else .flowr_new_map()
   ul <- if (isTRUE(color)) .flowr_underline_ranges(x, lines, loc_map) else list()
   cov <- if (isTRUE(color)) .flowr_covered_ranges(x$ids, loc_map, lines) else list()
   for (i in seq_along(lines)) {
@@ -601,7 +643,7 @@ print.flowr_slice <- function(x, style = x$style %||% getOption("flowr.slice_sty
 #' @return The query results, a named list keyed by query type. Printing caps
 #'   long nested lists/vectors at a few dozen elements; the values themselves
 #'   are untouched, only the console view.
-#' @details Supported query types in flowR 2.13.3 include `dependencies`,
+#' @details Supported query types in flowR 2.13.8 include `dependencies`,
 #'   `call-context`, `dataflow`, `static-slice`, `id-map`, `normalized-ast`,
 #'   `linter`, `location-map`, `call-graph`, `absint` (abstract
 #'   interpretation, e.g. `list(type = "absint", inference = "df-shape")` for
@@ -1029,7 +1071,9 @@ flowr_watch <- function(file, action = function(f) print(flowr_overview(file = f
 #'
 #' @param x A `flowr_slice`, or an analysis AST as returned within one.
 #' @return A named list mapping node id (as string) to a `[line1, col1, line2,
-#'   col2]` location, ordered by node id.
+#'   col2]` location, ordered by node id. Line numbers are counted within a
+#'   file, so each location also carries the file it belongs to as its `"file"`
+#'   attribute (`NA` when the analysis did not report one).
 #' @export
 #' @examples
 #' \dontrun{
@@ -1037,10 +1081,16 @@ flowr_watch <- function(file, action = function(f) print(flowr_overview(file = f
 #' flowr_locations(s)               # node id -> source location
 #' }
 flowr_locations <- function(x) {
-  ast <- if (inherits(x, "flowr_slice")) x$analysis$results$normalize$ast else x
   # built as an environment so it scales to project-sized ASTs; the public
   # return value stays the named list callers have always indexed into
-  map <- as.list(make_id_to_location_map(ast))
+  map <- if (inherits(x, "flowr_slice")) {
+    as.list(.flowr_slice_location_map(x))
+  } else {
+    as.list(make_id_to_location_map(x))
+  }
+  if (length(map) == 0) {
+    return(map)
+  }
   nm <- names(map)
   num <- suppressWarnings(as.numeric(nm))
   map[order(is.na(num), num, nm)]
@@ -1054,7 +1104,10 @@ flowr_locations <- function(x) {
 #' RStudio addin) to highlight a slice.
 #'
 #' @param slice A `flowr_slice` from [slice()].
-#' @return A list of numeric length-4 location vectors.
+#' @return A list of numeric length-4 location vectors, each carrying the file
+#'   its line numbers are counted in as its `"file"` attribute (`NA` when the
+#'   analysis did not report one) --- a highlighter needs that to place a
+#'   location from a multi-file slice.
 #' @export
 #' @examples
 #' \dontrun{
@@ -1064,9 +1117,7 @@ flowr_slice_locations <- function(slice) {
   if (!inherits(slice, "flowr_slice")) {
     .flowr_stop("`slice` must be a flowr_slice")
   }
-  ast <- slice$analysis$results$normalize$ast
-  location_map <- tryCatch(make_id_to_location_map(ast),
-                           error = function(e) .flowr_new_map())
+  location_map <- .flowr_slice_location_map(slice)
   # preallocate: `out[[length(out) + 1L]] <- ...` re-copies the list on every
   # append, so a large slice spent quadratic time here
   out <- vector("list", length(slice$ids))

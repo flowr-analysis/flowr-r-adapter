@@ -10,7 +10,9 @@ flowr_locations(x)
 \item{x}{A \code{flowr_slice}, or an analysis AST as returned within one.}
 }
 \value{
-A named list mapping node id (as string) to a \verb{[line1, col1, line2, col2]} location, ordered by node id.
+A named list mapping node id (as string) to a \verb{[line1, col1, line2, col2]} location, ordered by node id. Line numbers are counted within a
+file, so each location also carries the file it belongs to as its \code{"file"}
+attribute (\code{NA} when the analysis did not report one).
 }
 \description{
 Map the node ids of a slice (or analysis) to source locations

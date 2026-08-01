@@ -10,7 +10,10 @@ flowr_slice_locations(slice)
 \item{slice}{A \code{flowr_slice} from \code{\link[=slice]{slice()}}.}
 }
 \value{
-A list of numeric length-4 location vectors.
+A list of numeric length-4 location vectors, each carrying the file
+its line numbers are counted in as its \code{"file"} attribute (\code{NA} when the
+analysis did not report one) --- a highlighter needs that to place a
+location from a multi-file slice.
 }
 \description{
 Resolves the node ids of a slice to their \verb{[line1, col1, line2, col2]} source
