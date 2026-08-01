@@ -1,4 +1,4 @@
-# flowr (development version)
+# flowr 0.2.12
 
 * Targets flowR 2.13.8 (from 2.13.3); the shipped `inst/flowr-js` bundle is
   rebuilt accordingly. The query surface is unchanged.
