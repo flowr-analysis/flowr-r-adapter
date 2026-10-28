@@ -13,7 +13,7 @@ flowr_install(
 )
 }
 \arguments{
-\item{version}{flowR version to install (default \code{"2.15.8"}).}
+\item{version}{flowR version to install (default \code{"2.16.7"}).}
 
 \item{engine}{\code{"binary"} (a self-contained executable, no Node/Docker needed),
 \code{"node"} (the flowR npm package run with a system or private Node.js) or

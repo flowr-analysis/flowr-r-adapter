@@ -19,7 +19,7 @@ flowr_connect(
 JS+wasm shipped with the package, run on your Node), \code{"binary"}
 (self-contained, no Node), \code{"node"} or \code{"docker"}.}
 
-\item{flowr_version}{flowR version to obtain (default \code{"2.15.8"}).}
+\item{flowr_version}{flowR version to obtain (default \code{"2.16.7"}).}
 
 \item{flowr_engine}{flowR parser engine, \code{"tree-sitter"} (default, needs no R)
 or \code{"r-shell"} (reuses the R on your \code{PATH}).}

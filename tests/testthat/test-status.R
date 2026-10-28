@@ -52,8 +52,8 @@ test_that("an available update names the command that actually gets it", {
   expect_true(all(nchar(hint) + 16L <= 80L))
 
   # a newer flowR engine is a different command
-  expect_identical(flowr:::.flowr_update_hint("flowR", "2.15.8"),
-                   "flowr_update(\"2.15.8\")")
+  expect_identical(flowr:::.flowr_update_hint("flowR", "2.16.7"),
+                   "flowr_update(\"2.16.7\")")
 })
 
 test_that("print.flowr_status shows the update command, not just the advice", {
@@ -67,19 +67,19 @@ test_that("print.flowr_status shows the update command, not just the advice", {
 })
 
 test_that("the reported flowR version links to its release notes", {
-  expect_identical(flowr:::.flowr_flowr_release_url("2.15.8"),
-                   "https://github.com/flowr-analysis/flowr/releases/tag/v2.15.8")
+  expect_identical(flowr:::.flowr_flowr_release_url("2.16.7"),
+                   "https://github.com/flowr-analysis/flowr/releases/tag/v2.16.7")
   # only for something that is actually a version
   expect_null(flowr:::.flowr_flowr_release_url("?"))
   expect_null(flowr:::.flowr_flowr_release_url(NA_character_))
 
   withr::local_options(list(flowr.hyperlinks = TRUE))
-  linked <- flowr:::.flowr_release_link("2.15.8", TRUE)
-  expect_match(linked, "releases/tag/v2.15.8")
+  linked <- flowr:::.flowr_release_link("2.16.7", TRUE)
+  expect_match(linked, "releases/tag/v2.16.7")
   expect_match(linked, "\033]8;;")                    # an OSC 8 hyperlink
 
   # never advertise a link the terminal cannot follow, or when colour is off
-  expect_identical(flowr:::.flowr_release_link("2.15.8", FALSE), "2.15.8")
+  expect_identical(flowr:::.flowr_release_link("2.16.7", FALSE), "2.16.7")
   withr::local_options(list(flowr.hyperlinks = FALSE))
-  expect_identical(flowr:::.flowr_release_link("2.15.8", TRUE), "2.15.8")
+  expect_identical(flowr:::.flowr_release_link("2.16.7", TRUE), "2.16.7")
 })

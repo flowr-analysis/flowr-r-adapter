@@ -8,7 +8,7 @@ on:
       version:
         description: "flowR version to build"
         required: true
-        default: "2.15.8"
+        default: "2.16.7"
       force_rebuild:
         description: "Rebuild and overwrite binaries even if already published"
         required: false

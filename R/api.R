@@ -643,7 +643,7 @@ print.flowr_slice <- function(x, style = x$style %||% getOption("flowr.slice_sty
 #' @return The query results, a named list keyed by query type. Printing caps
 #'   long nested lists/vectors at a few dozen elements; the values themselves
 #'   are untouched, only the console view.
-#' @details Supported query types in flowR 2.15.8 include `dependencies`,
+#' @details Supported query types in flowR 2.16.7 include `dependencies`,
 #'   `call-context`, `dataflow`, `static-slice`, `id-map`, `normalized-ast`,
 #'   `linter`, `location-map`, `call-graph`, `absint` (abstract
 #'   interpretation, e.g. `list(type = "absint", inference = "df-shape")` for
