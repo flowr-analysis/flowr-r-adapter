@@ -1,4 +1,4 @@
-# flowr (development version)
+# flowr 0.2.14
 
 * Targets flowR 2.16.7 (from 2.15.8); the shipped `inst/flowr-js` bundle is
   rebuilt accordingly.
