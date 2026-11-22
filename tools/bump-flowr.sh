@@ -22,15 +22,18 @@ trap 'rm -rf "$work"' EXIT
   # install scripts only build native tree-sitter bindings; the bundle uses the wasm
   npm install --no-fund --no-audit --ignore-scripts "@eagleoutice/flowr@$new" ignore esbuild
   npx esbuild --bundle node_modules/@eagleoutice/flowr/cli/flowr.js \
-    --platform=node --minify --target=node18 --outfile=flowr.min.js
+    --platform=node --minify --legal-comments=none --target=node18 \
+    --outfile=flowr.min.js
 )
 cp "$work/flowr.min.js" inst/flowr-js/
 cp "$work/node_modules/@davisvaughan/tree-sitter-r/tree-sitter-r.wasm" inst/flowr-js/
 cp "$work/node_modules/web-tree-sitter/tree-sitter.wasm" inst/flowr-js/
 printf 'VERSION %s\n' "$new" > inst/flowr-js/VERSION
 
-# the default, the docs, the tests and the binaries workflow all name the version
-git grep -lF "$old" -- . ':!NEWS.md' ':!inst/flowr-js' \
+# the default, the docs and the tests name the version. Workflow files are left
+# alone: pushing a change to one needs a token with the `workflow` scope, and the
+# flowr-update workflow should not depend on that.
+git grep -lF "$old" -- . ':!NEWS.md' ':!inst/flowr-js' ':!.github' \
   | xargs -r perl -pi -e "s/\\Q$old\\E/$new/g"
 
 # NEWS.md: amend the pending entry of the development version, or start one

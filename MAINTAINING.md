@@ -54,7 +54,7 @@ or wrong key aborts the install.
 ## 2. Publish the native binaries for a flowR version
 
 Run the **build-flowr-binaries** GitHub Action (Actions tab -> Run workflow),
-entering the flowR version (default `2.17.9`). To the `flowr-v<version>` release
+entering the flowR version (the `flowr_version` in `R/config.R`). To the `flowr-v<version>` release
 it uploads, each with a `.sha256` and (if the secret is set) a `.sig`:
 
 * `flowr-<version>-<os>-<arch>.tar.gz` — a self-contained binary per platform
@@ -80,8 +80,12 @@ The universal fallback in `inst/flowr-js/` (works everywhere with Node) must be
 rebuilt when you change the target flowR version. `tools/bump-flowr.sh <version>`
 does all of this (bundle, every reference to the old version, `NEWS.md`); the
 daily **flowr-update** workflow runs it for each new flowR release, runs
-`devtools::check()` and, if that passes, opens a `[release:patch]` pull request
-(needs the `RELEASE_TOKEN` secret). By hand:
+`devtools::check()` and opens a `[release:patch]` pull request (needs the
+`RELEASE_TOKEN` secret). If the check fails, the job still succeeds (no daily
+failure mails) and the pull request is a draft listing the failures: push fixes
+to `auto/flowr-update` (the workflow then leaves that branch alone) and mark it
+ready. Nothing is released until the pull request is merged. The script does not
+touch `.github/`, so the token needs no `workflow` scope. By hand:
 
 ```sh
 npm install @eagleoutice/flowr@<version> ignore esbuild

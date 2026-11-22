@@ -6,9 +6,8 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "flowR version to build"
+        description: "flowR version to build (e.g. the one in R/config.R)"
         required: true
-        default: "2.17.9"
       force_rebuild:
         description: "Rebuild and overwrite binaries even if already published"
         required: false
