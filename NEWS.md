@@ -1,3 +1,20 @@
+# flowr (development version)
+
+* Targets flowR 2.17.9 (from 2.16.7); the shipped `inst/flowr-js` bundle is
+  rebuilt accordingly.
+* `flowr_lint()` gives readable messages for the linter rules new in flowR
+  2.17: `secret-exfiltration`, `process-state-in-session`, `call-contracts`
+  (with the broken condition), `code-clones` (naming the other half of the
+  pair) and `interactive-functions`.
+* `flowr_help()` shows a function's contract (flowR 2.17's guards): the
+  conditions a call has to meet, e.g. `is.character(x)` for `strsplit()`.
+* `flowr_help()` marks required and forced arguments again. flowR reports
+  them as a bit set (`props`) rather than `required`/`forced` flags, so every
+  argument showed as "optional".
+* `?query` documents the queries new in flowR 2.17: `taint`, `code-clones`,
+  `ambient-access`, `inspect-fn-guards` and `data-columns`; all of them work
+  through `query()`.
+
 # flowr 0.2.14
 
 * Targets flowR 2.16.7 (from 2.15.8); the shipped `inst/flowr-js` bundle is

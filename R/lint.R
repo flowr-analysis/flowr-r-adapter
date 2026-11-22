@@ -38,12 +38,70 @@
     "network-functions"          = "network access",
     "stop-call"                  = "stop() call reachable here",
     "problematic-inputs"         = "problematic input value",
+    # flowR 2.17
+    "secret-exfiltration"        = sprintf("a secret reaches %s via `%s` (%s, %s severity)",
+                                           .flowr_lint_sink(x$sink), x[["function"]] %||% "?",
+                                           x$leak %||% "leak", x$severity %||% "unknown"),
+    "process-state-in-session"   = .flowr_lint_suggest(
+                                     sprintf("`%s` changes state all sessions share (%s)",
+                                             x$name %||% "?", x$change %||% "?"), x$suggestion),
+    "call-contracts"             = .flowr_lint_suggest(
+                                     sprintf("call of `%s` fails its contract", x[["function"]] %||% "?"),
+                                     paste(unlist(x$broken), collapse = "; "), sep = ": "),
+    "code-clones"                = sprintf("code is a clone of %s (%s, similarity %.2f)",
+                                           .flowr_lint_clone_of(x$clone, x$loc), x$algorithm %||% "?",
+                                           as.numeric(x$similarity %||% NA)),
+    "interactive-functions"      = sprintf("`%s` only works in an interactive session", x[["function"]] %||% "?"),
     NULL
   )
   if (!is.null(msg)) {
     return(msg)
   }
-  # generic fallback: the informative scalar fields, minus structural ones
+  .flowr_lint_fields(rule, x)
+}
+
+# A finding's message plus flowR's advice/detail, when it gave one.
+.flowr_lint_suggest <- function(msg, extra, sep = "; instead: ") {
+  extra <- as.character(extra %||% "")
+  if (length(extra) == 1L && nzchar(extra)) paste0(msg, sep, extra) else msg
+}
+
+# Where a secret-exfiltration sink sends data, in words.
+.flowr_lint_sink <- function(sink) {
+  sink <- as.character(sink %||% "")
+  if (!nzchar(sink)) {
+    return("an untrusted sink")
+  }
+  switch(sink,
+    network = "the network", browser = "the browser", logs = "the logs",
+    file = "a file", url = "a url", process = "another process",
+    llm = "a language model", paste("the", sink))
+}
+
+# The other half of a clone pair: its name and where it is, naming the file
+# only when the clone lives in another one than the finding itself.
+.flowr_lint_clone_of <- function(clone, own_loc = NULL) {
+  if (!is.list(clone)) {
+    return("other code")
+  }
+  line <- if (length(clone$loc)) clone$loc[[1]] else NULL
+  file <- clone$file %||% if (length(clone$loc) >= 5L) clone$loc[[5]] else NULL
+  own <- if (length(own_loc) >= 5L) own_loc[[5]] else NULL
+  where <- if (!is.null(line)) paste0("line ", line) else NULL
+  if (!is.null(file) && !identical(file, own)) {
+    where <- paste0(basename(file), if (!is.null(line)) paste0(":", line))
+  }
+  name <- clone$name %||% ""
+  if (nzchar(name)) {
+    paste0("`", name, "`", if (!is.null(where)) paste0(" at ", where))
+  } else {
+    where %||% "other code"
+  }
+}
+
+# The generic message: rule name plus the finding's scalar fields.
+.flowr_lint_fields <- function(rule, x) {
+  # the informative scalar fields, minus structural ones
   drop <- c("loc", "certainty", "quickFix", "involvedId")
   flds <- x[setdiff(names(x), drop)]
   flds <- flds[vapply(flds, function(v) is.atomic(v) && length(v) == 1L, logical(1))]

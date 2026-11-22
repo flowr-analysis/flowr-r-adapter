@@ -213,3 +213,36 @@ test_that("flowr_lint_fix() reuses a flowr_lint() result (no re-analysis)", {
   expect_type(fixed, "character")
   expect_false(grepl("dead_var", fixed))
 })
+
+test_that("the rules new in flowR 2.17 get readable messages", {
+  loc <- function(l, c) list(l, c, l, c + 5L, "/tmp/x.R")
+  msg <- function(rule, x) flowr:::.flowr_lint_message(rule, x)
+  # shapes as flowR 2.17.9 reports them
+  expect_identical(
+    msg("secret-exfiltration", list(loc = loc(5L, 3L), certainty = "uncertain",
+        `function` = "httr::GET", sink = "network", leak = "exfiltration", severity = "high")),
+    "a secret reaches the network via `httr::GET` (exfiltration, high severity)")
+  expect_identical(
+    msg("process-state-in-session", list(change = "process-setting", name = "options",
+        suggestion = "withr::local_options")),
+    "`options` changes state all sessions share (process-setting); instead: withr::local_options")
+  expect_identical(
+    msg("call-contracts", list(`function` = "combn", broken = list("m >= 0 fails for m = -1"))),
+    "call of `combn` fails its contract: m >= 0 fails for m = -1")
+  expect_identical(msg("call-contracts", list(`function` = "f")),
+                   "call of `f` fails its contract")
+  expect_identical(
+    msg("code-clones", list(loc = loc(1L, 14L), algorithm = "gst", similarity = 1L,
+        clone = list(file = "/tmp/x.R", id = 48L, loc = loc(5L, 13L), name = "scale_it"))),
+    "code is a clone of `scale_it` at line 5 (gst, similarity 1.00)")
+  # a clone in another file names that file
+  expect_match(
+    msg("code-clones", list(loc = loc(1L, 1L), algorithm = "winnowing", similarity = 0.8,
+        clone = list(file = "/p/R/b.R", loc = list(7L, 1L, 9L, 1L, "/p/R/b.R"), name = "g"))),
+    "`g` at b.R:7 (winnowing, similarity 0.80)", fixed = TRUE)
+  expect_identical(msg("interactive-functions", list(`function` = "utils::View")),
+                   "`utils::View` only works in an interactive session")
+  # still degrades gracefully on a rule we do not know
+  expect_identical(msg("some-future-rule", list(loc = loc(1L, 1L), what = "x")),
+                   "some-future-rule: what=x")
+})

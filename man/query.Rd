@@ -41,13 +41,19 @@ character vector of query type names (e.g. \code{"dependencies"}), a single quer
 object (a named list with a \code{type}), or a list of such objects.
 }
 \details{
-Supported query types in flowR 2.16.7 include \code{dependencies},
+Supported query types in flowR 2.17.9 include \code{dependencies},
 \code{call-context}, \code{dataflow}, \code{static-slice}, \code{id-map}, \code{normalized-ast},
 \code{linter}, \code{location-map}, \code{call-graph}, \code{absint} (abstract
 interpretation, e.g. \code{list(type = "absint", inference = "df-shape")} for
 data-frame shapes), \code{guess-dep-versions} (see \code{\link[=flowr_guess_versions]{flowr_guess_versions()}}),
-\code{signature} (see \code{\link[=flowr_help]{flowr_help()}}), and more. Pass extra arguments by using
-the object form, e.g. \code{query(code, list(type = "static-slice", criteria = I("3@x")))}.
+\code{signature} (see \code{\link[=flowr_help]{flowr_help()}}), and more. New in flowR 2.17: \code{taint}
+(taint analysis, e.g. \code{list(type = "taint", defs = I("normalization-constant"))}),
+\code{code-clones} (duplicated code, e.g. \code{list(type = "code-clones", algorithms = I(c("gst", "winnowing")))}), \code{ambient-access} (what code reads
+and writes of global state: options, environment variables, the working
+directory, ...), \code{inspect-fn-guards} (the contract each function enforces on
+its arguments), and \code{data-columns} (the data-frame columns available at a
+\code{"line:col"} position). Pass extra arguments by using the object form, e.g.
+\code{query(code, list(type = "static-slice", criteria = I("3@x")))}.
 }
 \section{Analysing the current project}{
 

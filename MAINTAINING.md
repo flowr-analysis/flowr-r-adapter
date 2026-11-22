@@ -54,7 +54,7 @@ or wrong key aborts the install.
 ## 2. Publish the native binaries for a flowR version
 
 Run the **build-flowr-binaries** GitHub Action (Actions tab -> Run workflow),
-entering the flowR version (default `2.16.7`). To the `flowr-v<version>` release
+entering the flowR version (default `2.17.9`). To the `flowr-v<version>` release
 it uploads, each with a `.sha256` and (if the secret is set) a `.sig`:
 
 * `flowr-<version>-<os>-<arch>.tar.gz` — a self-contained binary per platform
@@ -77,7 +77,11 @@ make binaries              # this machine's platform only
 ## 3. Update the shipped bundle when bumping flowR
 
 The universal fallback in `inst/flowr-js/` (works everywhere with Node) must be
-rebuilt when you change the target flowR version:
+rebuilt when you change the target flowR version. `tools/bump-flowr.sh <version>`
+does all of this (bundle, every reference to the old version, `NEWS.md`); the
+daily **flowr-update** workflow runs it for each new flowR release, runs
+`devtools::check()` and, if that passes, opens a `[release:patch]` pull request
+(needs the `RELEASE_TOKEN` secret). By hand:
 
 ```sh
 npm install @eagleoutice/flowr@<version> ignore esbuild

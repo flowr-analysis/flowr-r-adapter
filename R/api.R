@@ -643,13 +643,20 @@ print.flowr_slice <- function(x, style = x$style %||% getOption("flowr.slice_sty
 #' @return The query results, a named list keyed by query type. Printing caps
 #'   long nested lists/vectors at a few dozen elements; the values themselves
 #'   are untouched, only the console view.
-#' @details Supported query types in flowR 2.16.7 include `dependencies`,
+#' @details Supported query types in flowR 2.17.9 include `dependencies`,
 #'   `call-context`, `dataflow`, `static-slice`, `id-map`, `normalized-ast`,
 #'   `linter`, `location-map`, `call-graph`, `absint` (abstract
 #'   interpretation, e.g. `list(type = "absint", inference = "df-shape")` for
 #'   data-frame shapes), `guess-dep-versions` (see [flowr_guess_versions()]),
-#'   `signature` (see [flowr_help()]), and more. Pass extra arguments by using
-#'   the object form, e.g. `query(code, list(type = "static-slice", criteria = I("3@x")))`.
+#'   `signature` (see [flowr_help()]), and more. New in flowR 2.17: `taint`
+#'   (taint analysis, e.g. `list(type = "taint", defs = I("normalization-constant"))`),
+#'   `code-clones` (duplicated code, e.g. `list(type = "code-clones",
+#'   algorithms = I(c("gst", "winnowing")))`), `ambient-access` (what code reads
+#'   and writes of global state: options, environment variables, the working
+#'   directory, ...), `inspect-fn-guards` (the contract each function enforces on
+#'   its arguments), and `data-columns` (the data-frame columns available at a
+#'   `"line:col"` position). Pass extra arguments by using the object form, e.g.
+#'   `query(code, list(type = "static-slice", criteria = I("3@x")))`.
 #' @seealso [flowr_overview()], [dataflow()], [flowr_guess_versions()], [flowr_help()]
 #' @inheritSection slice Analysing the current project
 #' @export

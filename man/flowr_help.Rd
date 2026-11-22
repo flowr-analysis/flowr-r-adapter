@@ -56,6 +56,11 @@ to go straight to one package's version. A topic found in exactly one
 package resolves directly to its full signature; several hits are listed
 (like \code{apropos()}) so you can narrow with \code{package}.
 
+A function's view also lists its \emph{contract} when flowR knows one (flowR
+2.17 and later): the conditions a call has to meet to return normally, read
+off the checks in the function's body (e.g. \code{is.character(x)} for
+\code{strsplit()}). The full record is in \verb{$result$function$guards}.
+
 Needs a signature database installed (see \code{\link[=flowr_install]{flowr_install()}}); errors with
 that hint if none is mounted.
 }

@@ -115,3 +115,56 @@ test_that("flowr_help() against a mock server resolves a lone bare-topic match a
   expect_identical(h2$kind, "not_found")
   expect_output(print(h2), 'does not know the package "totally_unknown_pkg"')
 })
+
+test_that("parameter facts are read from flowR's ArgProp bit set", {
+  # flowR >= 2.16 reports `props` (1 = Forced, 2 = NoDefault) instead of flags
+  expect_true(flowr:::.flowr_param_required(list(name = "x", props = 2L)))
+  expect_true(flowr:::.flowr_param_required(list(name = "x", props = 3L)))
+  expect_false(flowr:::.flowr_param_required(list(name = "x", props = 1L)))
+  expect_false(flowr:::.flowr_param_required(list(name = "y", props = 2L, default = "1")))
+  expect_false(flowr:::.flowr_param_required(list(name = "...", props = 2L)))
+  expect_true(flowr:::.flowr_param_forced(list(name = "x", props = 3L)))
+  expect_false(flowr:::.flowr_param_forced(list(name = "x", props = 2L)))
+  # the older flag shape still works
+  expect_true(flowr:::.flowr_param_required(list(name = "x", required = TRUE)))
+  expect_true(flowr:::.flowr_param_forced(list(name = "x", forced = TRUE)))
+  expect_false(flowr:::.flowr_param_required(list(name = "x")))
+
+  fn_obj <- structure(list(kind = "function", query = list(package = "utils", `function` = "combn"),
+                          result = list(`function` = list(
+                            name = "combn", package = "utils", exported = TRUE,
+                            parameters = list(list(name = "x", props = 2L), list(name = "m", props = 3L),
+                                              list(name = "FUN", props = 0L, default = "NULL"),
+                                              list(name = "...", props = 2L))))),
+                     class = "flowr_help")
+  out <- capture.output(print(fn_obj))
+  expect_true(any(grepl("^  x +required$", out)))
+  expect_true(any(grepl("^  m +required \\(forced\\)$", out)))
+  expect_true(any(grepl("^  FUN +=  ?NULL$", out)))
+  expect_true(any(grepl("^  \\.\\.\\. +optional$", out)))
+})
+
+test_that("a function's contract (flowR 2.17 guards) is summarised", {
+  guards <- list(requires = "length(m) == 1L && m >= 0",
+                 because = list(list(requires = "length(m) == 1L", kind = "explicit"),
+                                list(requires = "m >= 0", kind = "explicit"),
+                                list(requires = "m >= 0", kind = "explicit")))
+  expect_identical(flowr:::.flowr_help_contract_lines(guards), c("length(m) == 1L", "m >= 0"))
+  # no per-clause reasons: the whole condition
+  expect_identical(flowr:::.flowr_help_contract_lines(list(requires = "is.character(x)")),
+                   "is.character(x)")
+  many <- list(because = lapply(1:9, function(i) list(requires = paste0("c", i))))
+  expect_identical(flowr:::.flowr_help_contract_lines(many, max = 3L),
+                   c("c1", "c2", "c3", "... and 6 more"))
+  expect_identical(flowr:::.flowr_help_contract_lines(NULL), character(0))
+
+  fn_obj <- structure(list(kind = "function", query = list(package = "base", `function` = "strsplit"),
+                          result = list(`function` = list(
+                            name = "strsplit", package = "base", exported = TRUE,
+                            parameters = list(list(name = "x", props = 2L)),
+                            guards = list(requires = "is.character(x)")))),
+                     class = "flowr_help")
+  out <- capture.output(print(fn_obj))
+  expect_true(any(out == "contract"))
+  expect_true(any(out == "  is.character(x)"))
+})

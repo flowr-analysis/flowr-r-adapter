@@ -1,0 +1,81 @@
+# Daily: if a newer flowR is on npm, retarget the package to it
+# (tools/bump-flowr.sh), run the check and, if it passes, open a release PR.
+# Merging that PR with its title unchanged releases the package and builds the
+# native binaries for the new flowR version (see release.yml).
+name: flowr-update
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+  repository_dispatch:
+    types: [flowr-release]
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check for a new flowR version
+        id: check
+        run: |
+          latest=$(npm view @eagleoutice/flowr version)
+          current=$(sed -n -E 's/.*flowr_version[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/p' R/config.R | head -1)
+          echo "current flowR $current, latest $latest"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          # only move forward, never to an older release
+          if [ "$latest" != "$current" ] && [ "$(printf '%s\n%s\n' "$current" "$latest" | sort -V | tail -1)" = "$latest" ]; then
+            echo "update=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update flowR
+        if: steps.check.outputs.update
+        run: tools/bump-flowr.sh "$LATEST"
+        env:
+          LATEST: ${{ steps.check.outputs.latest }}
+
+      - name: Install R
+        if: steps.check.outputs.update
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.4.0'
+      - name: Install dependencies
+        if: steps.check.outputs.update
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: devtools
+      - name: Run devtools::check()
+        if: steps.check.outputs.update
+        # same gate as test.yml; the pull request then runs the full matrix
+        run: Rscript -e 'devtools::check(error_on = "warning")'
+
+      - name: Create pull request
+        if: steps.check.outputs.update
+        uses: peter-evans/create-pull-request@v7
+        with:
+          # a token other than GITHUB_TOKEN, so the pull request triggers the regular CI
+          token: ${{ secrets.RELEASE_TOKEN }}
+          branch: auto/flowr-update
+          delete-branch: true
+          add-paths: |
+            .github
+            MAINTAINING.md
+            NEWS.md
+            R
+            inst/flowr-js
+            man
+            tests
+          commit-message: '[release:patch] Bump to flowR ${{ steps.check.outputs.latest }}'
+          title: '[release:patch] Bump to flowR ${{ steps.check.outputs.latest }}'
+          body: |
+            Updates flowR to [${{ steps.check.outputs.latest }}](https://github.com/flowr-analysis/flowr/releases/tag/v${{ steps.check.outputs.latest }}): rebuilt `inst/flowr-js` and bumped every reference to the old version (`tools/bump-flowr.sh`). `devtools::check()` passed with the new version.
+            Squash-merge with the title unchanged to release; the release builds the native binaries for this flowR version.

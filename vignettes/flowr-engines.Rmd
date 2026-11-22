@@ -124,12 +124,19 @@ flowr_lint("setwd('/x')")          # now runs only those two rules
 flowr_set_config(lint_rules = character(0))   # back to flowR's full set
 ```
 
-The rules available in flowR 2.11.1 are: `absolute-file-paths`,
-`file-path-validity`, `seeded-randomness`, `deprecated-functions`,
-`network-functions`, `dataframe-access-validation`, `dead-code`, `useless-loop`,
+The rules include `absolute-file-paths`, `file-path-validity`,
+`seeded-randomness`, `deprecated-functions`, `network-functions`,
+`dataframe-access-validation`, `dead-code`, `useless-loop`,
 `problematic-inputs`, `stop-call`, `unused-definitions`, `naming-convention`,
 `roxygen-arguments`, `no-leaked-credentials`, `undefined-symbol`,
-`software-has-license` and `software-has-tests`. Each is documented on the flowR
+`software-has-license` and `software-has-tests`. flowR 2.17 adds
+`secret-exfiltration` (secrets sent to the network, the browser or logs),
+`process-state-in-session` (Shiny sessions changing state all sessions share),
+`call-contracts` (calls that break a function's contract), `code-clones`
+(duplicated code) and `interactive-functions` (`View()`, `browser()`, ... left
+in a script). The flowR wiki's
+[Linter page](https://github.com/flowr-analysis/flowr/wiki/Linter) has the full,
+current list. Each is documented on the flowR
 wiki (e.g. <https://github.com/flowr-analysis/flowr/wiki/%5BLinting-Rule%5D-Absolute-File-Paths>);
 `flowr_lint()`'s printed report links every rule to its page. Findings marked
 `[fix]` can be applied with `flowr_lint_fix()`.

@@ -57,6 +57,11 @@
 #' package resolves directly to its full signature; several hits are listed
 #' (like `apropos()`) so you can narrow with `package`.
 #'
+#' A function's view also lists its *contract* when flowR knows one (flowR
+#' 2.17 and later): the conditions a call has to meet to return normally, read
+#' off the checks in the function's body (e.g. `is.character(x)` for
+#' `strsplit()`). The full record is in `$result$function$guards`.
+#'
 #' Needs a signature database installed (see [flowr_install()]); errors with
 #' that hint if none is mounted.
 #'
@@ -145,6 +150,50 @@ flowr_help <- function(topic = NULL, package = NULL, version = NULL,
   structure(list(kind = kind, query = qobj, result = res), class = "flowr_help")
 }
 
+# flowR reports a parameter's facts as an `ArgProp` bit set (`props`): bit 1 is
+# Forced, bit 2 NoDefault. Older replies carried `required`/`forced` flags
+# instead; both are understood. `...` never counts as required.
+.flowr_param_has <- function(p, bit) {
+  props <- p$props
+  length(props) == 1L && is.numeric(props) && !is.na(props) &&
+    bitwAnd(as.integer(props), as.integer(bit)) != 0L
+}
+.flowr_param_required <- function(p) {
+  if (identical(p$name, "...")) {
+    return(FALSE)
+  }
+  isTRUE(p$required) || (is.null(p$default) && .flowr_param_has(p, 2L))
+}
+.flowr_param_forced <- function(p) isTRUE(p$forced) || .flowr_param_has(p, 1L)
+
+# The conditions a call has to meet to return normally (flowR >= 2.17's
+# `guards`): one line per checked condition, capped so a long contract stays a
+# summary; the full record is in `$result$function$guards`.
+.flowr_help_contract_lines <- function(guards, max = 6L) {
+  if (!is.list(guards)) {
+    return(character(0))
+  }
+  clauses <- unique(unlist(lapply(guards$because %||% list(), function(b) b$requires)))
+  if (length(clauses) == 0L) {
+    clauses <- unlist(guards$requires)
+  }
+  clauses <- as.character(clauses[nzchar(clauses)])
+  if (length(clauses) > max) {
+    clauses <- c(clauses[seq_len(max)], sprintf("... and %d more", length(clauses) - max))
+  }
+  clauses
+}
+
+.flowr_help_print_contract <- function(guards, color) {
+  lines <- .flowr_help_contract_lines(guards)
+  if (length(lines) == 0L) {
+    return(invisible())
+  }
+  cat(.flowr_ansi("contract", "1", color), "\n", sep = "")
+  for (l in lines) cat("  ", .flowr_ansi(l, "90", color), "\n", sep = "")
+  invisible()
+}
+
 # One "name (params)" line for a function view, with the exported/deprecated/
 # forced/S3 tags a reader of `?fn` would expect help() itself to show.
 .flowr_help_print_function <- function(fn, color) {
@@ -169,11 +218,12 @@ flowr_help <- function(topic = NULL, package = NULL, version = NULL,
   if (length(fn$parameters) > 0) {
     cat(.flowr_ansi("arguments", "1", color), "\n", sep = "")
     for (p in fn$parameters) {
-      req <- if (isTRUE(p$required)) "required" else if (!is.null(p$default)) paste0("= ", p$default) else "optional"
-      forced <- if (isTRUE(p$forced)) " (forced)" else ""
+      req <- if (.flowr_param_required(p)) "required" else if (!is.null(p$default)) paste0("= ", p$default) else "optional"
+      forced <- if (.flowr_param_forced(p)) " (forced)" else ""
       cat(sprintf("  %-20s %s\n", p$name, .flowr_ansi(paste0(req, forced), "90", color)))
     }
   }
+  .flowr_help_print_contract(fn$guards, color)
   if (isTRUE(fn$s3generic) && length(fn$s3methods) > 0) {
     cat(.flowr_ansi("S3 methods", "1", color), "\n", sep = "")
     cat("  ", paste(unlist(fn$s3methods), collapse = ", "), "\n", sep = "")
