@@ -217,7 +217,7 @@ test_that("flowr_lint_fix() reuses a flowr_lint() result (no re-analysis)", {
 test_that("the rules new in flowR 2.17 get readable messages", {
   loc <- function(l, c) list(l, c, l, c + 5L, "/tmp/x.R")
   msg <- function(rule, x) flowr:::.flowr_lint_message(rule, x)
-  # shapes as flowR 2.17.9 reports them
+  # shapes as flowR 2.17.13 reports them
   expect_identical(
     msg("secret-exfiltration", list(loc = loc(5L, 3L), certainty = "uncertain",
         `function` = "httr::GET", sink = "network", leak = "exfiltration", severity = "high")),
